@@ -1,0 +1,132 @@
+{
+    "details_title": "Détails",
+    "details_accepted": "Accepté({count})",
+    "service_details": {
+        "title": "Détails du Service",
+        "biography": "Biographie et certifications.",
+        "certificate": "Certificat",
+        "portfolio": "Portfolio",
+        "decline": "Décliner",
+        "confirm_now": "Confirmer maintenant",
+        "cost_of": "Coût : {price}"
+    },
+    "splash": {
+        "title": "HomeCraft Services",
+        "subtitle": "Trouvez rapidement le professionnel du bâtiment qui vous plaît."
+    },
+    "onboarding": {
+        "title": "Suivez et évaluez votre expérience",
+        "subtitle": "Restez informé de vos réservations en temps réel et partagez vos commentaires pour aider les autres.",
+        "role_title": "Comment allez-vous utiliser notre plateforme HomeCraft ?",
+        "role_subtitle": "Choisissez votre rôle pour commencer",
+        "get_started": "Commencer",
+        "client_role": "En tant que client",
+        "provider_role": "En tant que prestataire"
+    },
+    "auth": {
+        "register": {
+            "title": "Créer votre compte",
+            "subtitle": "Créez votre compte pour explorer HomeCraft",
+            "username": "Nom d'utilisateur",
+            "email": "Entrez votre email",
+            "password": "Mot de passe",
+            "confirm_password": "Confirmer le mot de passe",
+            "terms_prefix": "J'ai lu et j'accepte les ",
+            "terms_link": "Conditions Générales",
+            "button": "S'inscrire",
+            "or_sign_in": "Ou connectez-vous avec",
+            "google_sign_in": "Se connecter avec Google",
+            "apple_sign_in": "Se connecter avec Apple",
+            "already_have": "Vous avez déjà un compte ?",
+            "login_link": "Se connecter"
+        },
+        "login": {
+            "title": "Connexion",
+            "subtitle": "De retour ! Veuillez entrer vos détails.",
+            "email": "Entrez votre email",
+            "password": "Entrez votre mot de passe",
+            "remember_me": "Se souvenir de moi",
+            "forget_password": "Mot de passe oublié ?",
+            "button": "Se connecter",
+            "or_sign_in": "Ou connectez-vous avec",
+            "google_sign_in": "Se connecter avec Google",
+            "apple_sign_in": "Se connecter avec Apple",
+            "dont_have": "Vous n'avez pas de compte ?",
+            "register_link": "S'inscrire"
+        }
+    },
+    "projects": {
+        "all_projects": "Tous les projets",
+        "new_project": "Nouveau projet",
+        "no_projects_remaining": "Vous n'avez plus de projet restants,",
+        "add_limit_info": "vous pouvez ajouter 2 projets/Mois",
+        "remaining_count": "Projet restant {count}/2",
+        "my_projects": "Mon projet",
+        "form": {
+            "title": "Nouveau projet",
+            "project_title_label": "Titre du projet",
+            "project_title_hint": "Ex : Construire une terrasse",
+            "category_label": "Choisir une catégorie",
+            "category_hint": "Sélectionner...",
+            "description_label": "Description",
+            "description_hint": "Bonjour, je suis à la recherche d'un.e ( Insérer spécialiste) afin de ( écrivez ce dont vous avez besoin) .",
+            "attachment_label": "Pièce jointe",
+            "attachment_button": "Fichier",
+            "location_label": "Localisation",
+            "location_hint": "Paris, FR",
+            "date_label": "Date",
+            "date_hint": "jj/mm/aaaa",
+            "budget_label": "Budget (Optionnel)",
+            "submit": "Soumettre"
+        },
+        "details": {
+            "title": "Détails",
+            "accepted": "Accepté({count})"
+        },
+        "search_overlay": {
+            "location_label": "Emplacement",
+            "location_hint": "recherche",
+            "categories_label": "Catégories",
+            "date_label": "Date d'intervention",
+            "paris": "Paris",
+            "categories": {
+                "cleaning": "Nettoyage",
+                "painters": "Peintres",
+                "plumbing": "Plomberie",
+                "electrician": "Électricien"
+            }
+        },
+        "comments": {
+            "title": "Tous les commentaires",
+            "added_comment": "a ajouté un commentaire",
+            "time_ago": "il y a {count} heures"
+        },
+        "categories": {
+            "carpenters": "Menuisiers",
+            "painters": "Peintres",
+            "tiler": "Carreleur",
+            "kitchen_specialist": "Spécialiste cuisine",
+            "piscinist": "Pisciniste (entretien de piscine)",
+            "exterior_architect": "Architecte d'extérieur"
+        }
+    },
+    "professionals": {
+        "title": "professionnels",
+        "search_hint": "Rechercher l'emplacement",
+        "results_summary": "Résultats pour \"{location}, {category}, le {date}\"",
+        "found_count": "{count} Trouvé"
+    },
+    "filter": {
+        "title": "Filtre",
+        "distance_label": "Kilomètres de moi",
+        "maximum": "Maximum",
+        "availability_label": "Disponibilité",
+        "today": "Aujourd'hui",
+        "within_week": "Cette semaine",
+        "next_week": "La semaine prochaine",
+        "top_rated": "Mieux notés",
+        "see_results": "Voir le résultat",
+        "view_map": "Voir la carte",
+        "filter_by_location": "Filtrer par emplacement"
+    }
+}

@@ -1,0 +1,173 @@
+{
+  "details": {
+    "title": "Details",
+    "accepted": "Accepted({count})"
+  },
+  "search_overlay": {
+    "location_label": "Location",
+    "location_hint": "search",
+    "categories_label": "Categories",
+    "date_label": "Intervention Date",
+    "paris": "Paris",
+    "categories": {
+      "cleaning": "Cleaning",
+      "painters": "Painters",
+      "plumbing": "Plumbing",
+      "electrician": "Electrician"
+    }
+  },
+  "professionals": {
+    "title": "professionals",
+    "search_hint": "Search location",
+    "results_summary": "Results for \"{location}, {category}, the {date}\"",
+    "found_count": "{count} Found"
+  },
+  "filter": {
+    "title": "Filter",
+    "distance_label": "Kilometres From Me",
+    "maximum": "Maximum",
+    "availability_label": "Availability",
+    "today": "Today",
+    "within_week": "Within this week",
+    "next_week": "Next week",
+    "top_rated": "Top Rated",
+    "see_results": "See Result",
+    "view_map": "View Map",
+    "filter_by_location": "Filter by location"
+  },
+  "service_details": {
+    "title": "Detail Service",
+    "biography": "Biography and certifications.",
+    "certificate": "Certificate",
+    "portfolio": "Portfolio",
+    "decline": "Decline",
+    "confirm_now": "Confirm Now",
+    "cost_of": "Cost of: {price}"
+  },
+  "splash": {
+    "title": "HomeCraft Services",
+    "subtitle": "Quickly find the construction professional you like."
+  },
+  "onboarding": {
+    "title": "Track and Rate Your Experience",
+    "subtitle": "Stay updated on your bookings in real time and share your feedback to help others.",
+    "role_title": "How will you use our HomeCraft Service Platform?",
+    "role_subtitle": "Choose your role to get started",
+    "get_started": "Get Started",
+    "client_role": "As a client",
+    "provider_role": "As a service provider"
+  },
+  "auth": {
+    "register": {
+      "title": "Create Your Account",
+      "subtitle": "Create your account to explore HomeCraft",
+      "username": "User name",
+      "email": "Input your email",
+      "password": "Password",
+      "confirm_password": "Confirm password",
+      "terms_prefix": "I have read & agreed to Afterhours ",
+      "terms_link": "Terms & Condition",
+      "button": "Register",
+      "or_sign_in": "Or Sign in with",
+      "google_sign_in": "Sign in with Google",
+      "apple_sign_in": "Sign in with Apple",
+      "already_have": "Already have an account ?",
+      "login_link": "Login"
+    },
+    "login": {
+      "title": "Login",
+      "subtitle": "Welcome Back! Please enter your details.",
+      "email": "Input your email",
+      "password": "Input your password",
+      "remember_me": "Remember Me",
+      "forget_password": "Forget Password?",
+      "button": "Login",
+      "or_sign_in": "Or Sign in with",
+      "google_sign_in": "Sign in with Google",
+      "apple_sign_in": "Sign in with Apple",
+      "dont_have": "Don't have an account ?",
+      "register_link": "Register"
+    },
+    "forgot_password": {
+      "title": "Reset Your Password",
+      "subtitle": "Please enter your email and we will sent an OTP code in the next step to reset your password",
+      "email_hint": "Input your email",
+      "continue": "Continue"
+    },
+    "verify_otp": {
+      "title": "OTP Code Verification",
+      "subtitle": "We have sent an OTP code to your email aljami***@gmail.com.",
+      "resend_prefix": "Didn't receive the code? ",
+      "resend_link": "Resend Code",
+      "verify": "Verify"
+    },
+    "reset_password": {
+      "title": "Reset Password",
+      "new_password_hint": "Enter New Password",
+      "confirm_password_hint": "Re-enter New Password",
+      "button": "Reset Password"
+    },
+    "legal": {
+      "terms_title": "Terms of Services",
+      "terms_header": "Our Terms of Services",
+      "privacy_title": "Privacy Policy",
+      "privacy_header": "Our Policy",
+      "agree_text": "Agree with Terms of Services & Privacy Policy"
+    }
+  },
+  "home": {
+    "tabs": {
+      "search": "Search",
+      "favorites": "Favorites",
+      "appointment": "Appointment",
+      "message": "Message",
+      "profile": "Profile"
+    },
+    "start_project": "Start a Project",
+    "search_hint": "Search",
+    "recommendations": "Recommendations",
+    "cost_prefix": "Coût :",
+    "date_prefix": "Date:"
+  },
+  "projects": {
+    "all_projects": "All Project",
+    "new_project": "New Project",
+    "no_projects_remaining": "You have no project remaining,",
+    "add_limit_info": "you can add 2 projects/Month",
+    "remaining_count": "Remaining Project {count}/2",
+    "my_projects": "My Project",
+    "form": {
+      "title": "New Project",
+      "project_title_label": "Project Title",
+      "project_title_hint": "Ex: Building a terrace",
+      "category_label": "Choose Category",
+      "category_hint": "Select...",
+      "description_label": "Description",
+      "description_hint": "Bonjour, je suis à la recherche d'un.e ( Insérer spécialiste) afin de ( écrivez ce dont vous avez besoin) .",
+      "attachment_label": "Attachment",
+      "attachment_button": "File",
+      "location_label": "Location",
+      "location_hint": "New York, US",
+      "date_label": "Date",
+      "date_hint": "mm/dd/yyyy",
+      "budget_label": "Budget (Optional)",
+      "submit": "Submit"
+    },
+    "status": {
+      "accepted": "Accepted({count})"
+    },
+    "comments": {
+      "title": "All Comments",
+      "added_comment": "added a comment",
+      "time_ago": "{count} hours ago"
+    },
+    "categories": {
+      "carpenters": "Carpenters",
+      "painters": "Painters",
+      "tiler": "Tiler",
+      "kitchen_specialist": "Kitchen's specialist",
+      "piscinist": "Piscinist ( pool maintenance)",
+      "exterior_architect": "Exterior architect"
+    }
+  }
+}
