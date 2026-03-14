@@ -18,12 +18,26 @@ class ProviderMainScreen extends StatefulWidget {
 class _ProviderMainScreenState extends State<ProviderMainScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [const ProviderHomeScreen(), const MessageScreen(), const CalendarManagementScreen(), const ProviderProfileScreen()];
+  /// Build current tab screen without const so it rebuilds when locale changes.
+  Widget _buildCurrentScreen() {
+    switch (_selectedIndex) {
+      case 0:
+        return ProviderHomeScreen();
+      case 1:
+        return MessageScreen();
+      case 2:
+        return CalendarManagementScreen();
+      case 3:
+        return ProviderProfileScreen();
+      default:
+        return ProviderHomeScreen();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: _buildCurrentScreen(),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, -5))],

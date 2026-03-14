@@ -90,9 +90,10 @@
     },
     "forgot_password": {
       "title": "Reset Your Password",
-      "subtitle": "Please enter your email and we will sent an OTP code in the next step to reset your password",
+      "subtitle": "Please enter your email and we will send you a link to reset your password.",
       "email_hint": "Input your email",
-      "continue": "Continue"
+      "continue": "Continue",
+      "success": "Reset link sent. Check your email."
     },
     "verify_otp": {
       "title": "OTP Code Verification",
@@ -113,6 +114,26 @@
       "privacy_title": "Privacy Policy",
       "privacy_header": "Our Policy",
       "agree_text": "Agree with Terms of Services & Privacy Policy"
+    },
+    "validation": {
+      "email_required": "Email is required",
+      "email_invalid": "Enter a valid email address",
+      "password_required": "Password is required",
+      "password_min": "Password must be at least 6 characters",
+      "password_confirm": "Passwords do not match",
+      "username_required": "Name is required",
+      "username_min": "Name must be at least 2 characters",
+      "terms_required": "You must accept the terms and conditions"
+    },
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "user_not_found": "No account found with this email.",
+      "wrong_password": "Incorrect password.",
+      "email_already_in_use": "An account already exists with this email.",
+      "invalid_email": "This email address is invalid.",
+      "weak_password": "Password is too weak. Use at least 6 characters.",
+      "too_many_requests": "Too many attempts. Try again later.",
+      "network": "Network error. Check your connection."
     }
   },
   "home": {
@@ -190,6 +211,20 @@
     "update_password": "Update Password"
   },
   "provider": {
+    "home": {
+      "search_hint": "Search",
+      "recommendations": "Recommendations",
+      "limitation": "Limitation {current}/{max}",
+      "image_not_available": "Image not available",
+      "reject": "Reject",
+      "accept": "Accept",
+      "date_of_intervention": "Date of intervention",
+      "location": "Location",
+      "card_title_example": "Gardeners, landscaper",
+      "card_location_example": "New York, US",
+      "card_date_example": "Jun 14, 2025",
+      "card_description_example": "Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s."
+    },
     "nav": {
       "project": "Project",
       "message": "Message",

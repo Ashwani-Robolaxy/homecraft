@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/common_app_bar.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
+import '../providers/auth_provider.dart';
 
-class ProfessionalSetupScreen extends StatefulWidget {
+class ProfessionalSetupScreen extends ConsumerStatefulWidget {
   const ProfessionalSetupScreen({super.key});
 
   @override
-  State<ProfessionalSetupScreen> createState() => _ProfessionalSetupScreenState();
+  ConsumerState<ProfessionalSetupScreen> createState() => _ProfessionalSetupScreenState();
 }
 
-class _ProfessionalSetupScreenState extends State<ProfessionalSetupScreen> {
+class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _userNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _contactMailController = TextEditingController();
+  bool _dataLoaded = false;
   String? _selectedSpecialty;
   final List<String> _serviceAreas = ['New York', 'Paris', 'Paris', 'New York', 'New York'];
 
@@ -28,7 +35,29 @@ class _ProfessionalSetupScreenState extends State<ProfessionalSetupScreen> {
   ];
 
   @override
+  void dispose() {
+    _userNameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    _contactMailController.dispose();
+    super.dispose();
+  }
+
+  void _loadUserData() {
+    if (_dataLoaded) return;
+    _dataLoaded = true;
+    final user = ref.read(authStateNotifierProvider).currentUser;
+    if (user != null) {
+      _userNameController.text = user.displayName;
+      _phoneController.text = user.phone ?? '';
+      _addressController.text = user.city ?? '';
+      _contactMailController.text = user.email;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _loadUserData();
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: const CommonAppBar(title: 'Setup Profile', showNotification: false),
@@ -40,11 +69,11 @@ class _ProfessionalSetupScreenState extends State<ProfessionalSetupScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildSectionTitle('Personal Info.*'),
-              _buildTextField(hint: 'User name', icon: LucideIcons.user),
+              _buildTextField(controller: _userNameController, hint: 'User name', icon: LucideIcons.user),
               const SizedBox(height: 12),
-              _buildTextField(hint: 'Phone No.', icon: LucideIcons.phone),
+              _buildTextField(controller: _phoneController, hint: 'Phone No.', icon: LucideIcons.phone),
               const SizedBox(height: 12),
-              _buildTextField(hint: 'Address', icon: LucideIcons.mapPin),
+              _buildTextField(controller: _addressController, hint: 'Address', icon: LucideIcons.mapPin),
               const SizedBox(height: 12),
               _buildDescriptionField(),
 
@@ -58,7 +87,7 @@ class _ProfessionalSetupScreenState extends State<ProfessionalSetupScreen> {
               _buildTextField(hint: 'ABCD'),
               const SizedBox(height: 12),
               _buildLabel('Contact Mail*'),
-              _buildTextField(hint: 'nessa@gmail.com'),
+              _buildTextField(controller: _contactMailController, hint: 'Contact email'),
               const SizedBox(height: 12),
               _buildLabel('Address*'),
               _buildTextField(hint: 'Address', icon: LucideIcons.mapPin),
@@ -133,12 +162,13 @@ class _ProfessionalSetupScreenState extends State<ProfessionalSetupScreen> {
     );
   }
 
-  Widget _buildTextField({required String hint, IconData? icon}) {
+  Widget _buildTextField({String? hint, IconData? icon, TextEditingController? controller}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
+        controller: controller,
         decoration: InputDecoration(
-          hintText: hint,
+          hintText: hint ?? '',
           hintStyle: GoogleFonts.outfit(color: Colors.black26, fontSize: 14),
           prefixIcon: icon != null ? Icon(icon, color: AppColors.primaryRed, size: 20) : null,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),

@@ -1,14 +1,17 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-import 'core/router/app_router.dart';
+import 'core/router/app_router.dart' show appRouterProvider;
 import 'core/theme/app_theme.dart';
 import 'core/constants/app_assets.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await EasyLocalization.ensureInitialized();
 
   runApp(
@@ -18,14 +21,14 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // We use ScreenUtilInit to match Figma's design width/height (usually 390x844 for iPhone 14)
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(appRouterProvider);
     return ScreenUtilInit(
-      designSize: const Size(393, 852), // iPhone 14 Pro size roughly
+      designSize: const Size(393, 852),
       minTextAdapt: true,
       splitScreenMode: true,
       builder: (context, child) {
@@ -35,7 +38,7 @@ class MyApp extends StatelessWidget {
           supportedLocales: context.supportedLocales,
           locale: context.locale,
           theme: AppTheme.lightTheme,
-          routerConfig: appRouter,
+          routerConfig: router,
           debugShowCheckedModeBanner: false,
         );
       },

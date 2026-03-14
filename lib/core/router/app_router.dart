@@ -1,6 +1,9 @@
 // App Router Module
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../auth/auth_state_notifier.dart';
+import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/onboarding/presentation/screens/splash_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
@@ -39,9 +42,32 @@ import '../../features/profile/presentation/screens/provider_favorites_screen.da
 import '../../features/profile/presentation/screens/subscription_plans_screen.dart';
 import '../../features/projects/domain/models/project.dart';
 
-final appRouter = GoRouter(
-  initialLocation: '/provider-home',
-  routes: [
+const _publicPaths = ['/splash', '/onboarding', '/login', '/register', '/forgot-password', '/terms', '/privacy', '/verify-otp', '/reset-password'];
+
+GoRouter _createRouter(AuthStateNotifier authNotifier) {
+  return GoRouter(
+    refreshListenable: authNotifier,
+    initialLocation: '/splash',
+    redirect: (context, state) {
+      final user = authNotifier.currentUser;
+      final path = state.uri.path;
+      final isPublic = _publicPaths.contains(path);
+      if (user != null && (path == '/login' || path == '/register')) {
+        return user.isProvider ? '/provider-home' : '/home';
+      }
+      if (user == null && !isPublic) return '/login';
+      return null;
+    },
+    routes: _routes,
+  );
+}
+
+final appRouterProvider = Provider<GoRouter>((ref) {
+  final notifier = ref.watch(authStateNotifierProvider);
+  return _createRouter(notifier);
+});
+
+final List<RouteBase> _routes = [
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
     GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
@@ -84,5 +110,4 @@ final appRouter = GoRouter(
     GoRoute(path: '/accepted-projects', builder: (context, state) => const AcceptedProjectsScreen()),
     GoRoute(path: '/provider-favorites', builder: (context, state) => const ProviderFavoritesScreen()),
     GoRoute(path: '/subscription-plans', builder: (context, state) => const SubscriptionPlansScreen()),
-  ],
-);
+  ];

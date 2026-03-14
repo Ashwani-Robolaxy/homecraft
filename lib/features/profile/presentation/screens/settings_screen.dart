@@ -60,7 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       text: 'settings.delete'.tr(),
                       onPressed: () {
                         Navigator.pop(context);
-                        context.go('/login');
+                        context.go('/splash');
                       },
                     ),
                   ),

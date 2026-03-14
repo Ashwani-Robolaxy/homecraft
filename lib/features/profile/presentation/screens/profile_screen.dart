@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: const Color(0xFFF9F9F9),
       body: SingleChildScrollView(
@@ -16,7 +18,7 @@ class ProfileScreen extends StatelessWidget {
           children: [
             _buildHeader(context),
             const SizedBox(height: 20),
-            _buildMenuSection(context),
+            _buildMenuSection(context, ref),
             const SizedBox(height: 100), // Bottom padding for navigation bar
           ],
         ),
@@ -68,7 +70,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuSection(BuildContext context) {
+  Widget _buildMenuSection(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -91,7 +93,16 @@ class ProfileScreen extends StatelessWidget {
             _buildMenuItem(icon: LucideIcons.helpCircle, title: 'FAQ - ABOUT US', onTap: () => context.push('/about-us')),
           ]),
           const SizedBox(height: 20),
-          _buildMenuCard([_buildMenuItem(icon: LucideIcons.logOut, title: 'Log Out', onTap: () {})]),
+          _buildMenuCard([
+            _buildMenuItem(
+              icon: LucideIcons.logOut,
+              title: 'Log Out',
+              onTap: () async {
+                await ref.read(authRepositoryProvider).signOut();
+                if (context.mounted) context.go('/splash');
+              },
+            ),
+          ]),
         ],
       ),
     );

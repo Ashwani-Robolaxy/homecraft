@@ -53,6 +53,33 @@
             "apple_sign_in": "Se connecter avec Apple",
             "dont_have": "Vous n'avez pas de compte ?",
             "register_link": "S'inscrire"
+        },
+        "forgot_password": {
+            "title": "Réinitialiser le mot de passe",
+            "subtitle": "Entrez votre email et nous vous enverrons un lien pour réinitialiser votre mot de passe.",
+            "email_hint": "Entrez votre email",
+            "continue": "Continuer",
+            "success": "Lien envoyé. Vérifiez votre email."
+        },
+        "validation": {
+            "email_required": "L'email est requis",
+            "email_invalid": "Entrez une adresse email valide",
+            "password_required": "Le mot de passe est requis",
+            "password_min": "Le mot de passe doit contenir au moins 6 caractères",
+            "password_confirm": "Les mots de passe ne correspondent pas",
+            "username_required": "Le nom est requis",
+            "username_min": "Le nom doit contenir au moins 2 caractères",
+            "terms_required": "Vous devez accepter les conditions générales"
+        },
+        "errors": {
+            "generic": "Une erreur s'est produite. Veuillez réessayer.",
+            "user_not_found": "Aucun compte avec cet email.",
+            "wrong_password": "Mot de passe incorrect.",
+            "email_already_in_use": "Un compte existe déjà avec cet email.",
+            "invalid_email": "Cette adresse email est invalide.",
+            "weak_password": "Le mot de passe est trop faible. Utilisez au moins 6 caractères.",
+            "too_many_requests": "Trop de tentatives. Réessayez plus tard.",
+            "network": "Erreur réseau. Vérifiez votre connexion."
         }
     },
     "projects": {
@@ -149,6 +176,20 @@
         "update_password": "Mettre à jour le mot de passe"
     },
     "provider": {
+        "home": {
+            "search_hint": "Rechercher",
+            "recommendations": "Recommandations",
+            "limitation": "Limite {current}/{max}",
+            "image_not_available": "Image non disponible",
+            "reject": "Refuser",
+            "accept": "Accepter",
+            "date_of_intervention": "Date d'intervention",
+            "location": "Emplacement",
+            "card_title_example": "Jardiniers, paysagiste",
+            "card_location_example": "New York, US",
+            "card_date_example": "14 juin 2025",
+            "card_description_example": "Ipsum est simplement un faux texte de l'industrie de l'impression et de la composition. Lorem Ipsum est le texte factice standard de l'industrie depuis les années 1500."
+        },
         "nav": {
             "project": "Projet",
             "message": "Message",

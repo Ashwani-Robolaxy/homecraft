@@ -1,22 +1,27 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/common_app_bar.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 
-class PersonalInfoScreen extends StatefulWidget {
+class PersonalInfoScreen extends ConsumerStatefulWidget {
   const PersonalInfoScreen({super.key});
 
   @override
-  State<PersonalInfoScreen> createState() => _PersonalInfoScreenState();
+  ConsumerState<PersonalInfoScreen> createState() => _PersonalInfoScreenState();
 }
 
-class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
-  final _nameController = TextEditingController(text: 'Jhon Doe');
-  final _phoneController = TextEditingController(text: '************');
-  final _cityController = TextEditingController(text: '************');
+class _PersonalInfoScreenState extends ConsumerState<PersonalInfoScreen> {
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _cityController = TextEditingController();
+  bool _dataLoaded = false;
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -26,8 +31,48 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
     super.dispose();
   }
 
+  void _loadUserData() {
+    if (_dataLoaded) return;
+    _dataLoaded = true;
+    final user = ref.read(authStateNotifierProvider).currentUser;
+    if (user != null) {
+      _nameController.text = user.displayName;
+      _phoneController.text = user.phone ?? '';
+      _cityController.text = user.city ?? '';
+    }
+  }
+
+  Future<void> _updateProfile() async {
+    final displayName = _nameController.text.trim();
+    if (displayName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('auth.validation.username_required'.tr()), backgroundColor: AppColors.primaryRed),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    final result = await ref.read(authRepositoryProvider).updateProfile(
+          displayName: displayName,
+          phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+          city: _cityController.text.trim().isEmpty ? null : _cityController.text.trim(),
+        );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (result.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.errorMessage!.tr()), backgroundColor: AppColors.primaryRed),
+      );
+      return;
+    }
+    await ref.read(authStateNotifierProvider).refresh();
+    if (mounted) context.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
+    _loadUserData();
+    final user = ref.watch(authStateNotifierProvider).currentUser;
+    final displayName = user?.displayName ?? '';
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: const CommonAppBar(title: 'Personal Info', showNotification: false),
@@ -39,7 +84,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
             _buildProfileImage(),
             const SizedBox(height: 12),
             Text(
-              'Jhon Doe',
+              displayName.isEmpty ? '—' : displayName,
               style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.black12),
             ),
             const SizedBox(height: 32),
@@ -49,7 +94,11 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
             const SizedBox(height: 20),
             _buildTextField(label: 'City', controller: _cityController),
             const SizedBox(height: 100),
-            PrimaryGradientButton(text: 'Update Profile', onPressed: () => context.pop()),
+            PrimaryGradientButton(
+              text: 'Update Profile',
+              onPressed: _updateProfile,
+              isLoading: _saving,
+            ),
             const SizedBox(height: 24),
           ],
         ),

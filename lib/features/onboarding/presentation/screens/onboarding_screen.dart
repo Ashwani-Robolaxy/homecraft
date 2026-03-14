@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pageController = PageController();
   String? _selectedRole;
 
@@ -197,9 +199,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               setState(() {
                 _selectedRole = 'client';
               });
-              // Navigate to auth
               Future.delayed(const Duration(milliseconds: 300), () {
-                if (context.mounted) context.push('/login?role=client');
+                if (!context.mounted) return;
+                final user = ref.read(authStateNotifierProvider).currentUser;
+                if (user != null) {
+                  context.go(user.isProvider ? '/provider-home' : '/home');
+                } else {
+                  context.push('/login?role=client');
+                }
               });
             },
           ),
@@ -215,9 +222,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               setState(() {
                 _selectedRole = 'provider';
               });
-              // Navigate to auth
               Future.delayed(const Duration(milliseconds: 300), () {
-                if (context.mounted) context.push('/login?role=provider');
+                if (!context.mounted) return;
+                final user = ref.read(authStateNotifierProvider).currentUser;
+                if (user != null) {
+                  context.go(user.isProvider ? '/provider-home' : '/home');
+                } else {
+                  context.push('/login?role=provider');
+                }
               });
             },
           ),
