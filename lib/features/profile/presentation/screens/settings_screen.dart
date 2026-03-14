@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +14,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _profileHideOn = true;
   bool _isDarkMode = false;
 
   void _showDeleteAccountDialog() {
@@ -26,12 +28,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Delete Account',
+                'settings.delete_account_title'.tr(),
                 style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primaryRed),
               ),
               const SizedBox(height: 16),
               Text(
-                'Are you sure want to delete your Account?',
+                'settings.delete_account_message'.tr(),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(fontSize: 16, color: Colors.black54),
               ),
@@ -47,7 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                       ),
                       child: Text(
-                        'Cancel',
+                        'settings.cancel'.tr(),
                         style: GoogleFonts.outfit(color: AppColors.primaryRed, fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -55,7 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: PrimaryGradientButton(
-                      text: 'Delete',
+                      text: 'settings.delete'.tr(),
                       onPressed: () {
                         Navigator.pop(context);
                         context.go('/login');
@@ -93,11 +95,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
                     children: [
-                      _buildSettingsItem(icon: LucideIcons.refreshCw, title: 'Change password', onTap: () => context.push('/reset-password-profile')),
+                      _buildSettingsItem(icon: LucideIcons.lock, title: 'settings.change_password'.tr(), onTap: () => context.push('/reset-password-profile')),
                       const SizedBox(height: 16),
-                      _buildThemeItem(),
+                      _buildProfileHideItem(),
                       const SizedBox(height: 16),
-                      _buildSettingsItem(icon: LucideIcons.trash2, title: 'Delete account', onTap: _showDeleteAccountDialog),
+                      _buildModeItem(),
+                      const SizedBox(height: 16),
+                      _buildLanguageItem(),
+                      const SizedBox(height: 16),
+                      _buildSettingsItem(icon: LucideIcons.trash2, title: 'settings.delete_account'.tr(), onTap: _showDeleteAccountDialog),
                     ],
                   ),
                 ),
@@ -124,7 +130,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           Expanded(
             child: Text(
-              'Settings',
+              'settings.title'.tr(),
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white),
             ),
@@ -150,56 +156,92 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildThemeItem() {
+  Widget _buildProfileHideItem() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
-          const Icon(LucideIcons.sun, color: AppColors.primaryRed, size: 20),
+          const Icon(LucideIcons.eyeOff, color: AppColors.primaryRed, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Theme',
+              'settings.profile_hide'.tr(),
               style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black),
             ),
           ),
-          GestureDetector(
-            onTap: () => setState(() => _isDarkMode = !_isDarkMode),
-            child: Container(
-              width: 50,
-              height: 26,
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), color: const Color(0xFFE0E0E0)),
-              child: AnimatedStack_ThemeSwitch(isDarkMode: _isDarkMode),
-            ),
+          Switch(
+            value: _profileHideOn,
+            onChanged: (v) => setState(() => _profileHideOn = v),
+            activeColor: AppColors.primaryRed,
           ),
         ],
       ),
     );
   }
-}
 
-class AnimatedStack_ThemeSwitch extends StatelessWidget {
-  final bool isDarkMode;
-  const AnimatedStack_ThemeSwitch({super.key, required this.isDarkMode});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          left: isDarkMode ? 24 : 2,
-          top: 2,
-          child: Container(
-            width: 22,
-            height: 22,
-            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-            child: Icon(isDarkMode ? LucideIcons.moon : LucideIcons.sun, size: 14, color: AppColors.primaryRed),
+  Widget _buildModeItem() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          Icon(_isDarkMode ? LucideIcons.moon : LucideIcons.sun, color: AppColors.primaryRed, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'settings.mode'.tr(),
+              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black),
+            ),
           ),
-        ),
-      ],
+          Switch(
+            value: _isDarkMode,
+            onChanged: (v) => setState(() => _isDarkMode = v),
+            activeColor: AppColors.primaryRed,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLanguageItem() {
+    final isFrench = context.locale.languageCode == 'fr';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          const Icon(LucideIcons.languages, color: AppColors.primaryRed, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'settings.language'.tr(),
+              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black),
+            ),
+          ),
+          Text(
+            isFrench ? 'settings.french'.tr() : 'settings.english'.tr(),
+            style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary),
+          ),
+          const SizedBox(width: 8),
+          SegmentedButton<String>(
+            segments: [
+              ButtonSegment(value: 'en', label: Text('EN', style: GoogleFonts.outfit(fontSize: 12))),
+              ButtonSegment(value: 'fr', label: Text('FR', style: GoogleFonts.outfit(fontSize: 12))),
+            ],
+            selected: {isFrench ? 'fr' : 'en'},
+            onSelectionChanged: (Set<String> selected) {
+              final code = selected.first;
+              context.setLocale(Locale(code));
+            },
+            style: ButtonStyle(
+              padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

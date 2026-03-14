@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/common_app_bar.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
 
 class ProfessionalSetupScreen extends StatefulWidget {
@@ -30,19 +31,7 @@ class _ProfessionalSetupScreenState extends State<ProfessionalSetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(LucideIcons.chevronLeft, color: Colors.black),
-          onPressed: () => context.pop(),
-        ),
-        title: Text(
-          'Setup Profile',
-          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black),
-        ),
-        centerTitle: true,
-      ),
+      appBar: const CommonAppBar(title: 'Setup Profile', showNotification: false),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(

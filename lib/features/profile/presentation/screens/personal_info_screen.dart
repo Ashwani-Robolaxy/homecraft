@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/common_app_bar.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
 
 class PersonalInfoScreen extends StatefulWidget {
@@ -29,19 +30,7 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(LucideIcons.chevronLeft, color: Colors.black),
-          onPressed: () => context.pop(),
-        ),
-        title: Text(
-          'Personal Info',
-          style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.black),
-        ),
-        centerTitle: true,
-      ),
+      appBar: const CommonAppBar(title: 'Personal Info', showNotification: false),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(

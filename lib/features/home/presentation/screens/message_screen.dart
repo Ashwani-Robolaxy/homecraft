@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
@@ -16,7 +17,7 @@ class _MessageScreenState extends State<MessageScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFDF9F9),
-      appBar: const CommonAppBar(title: 'Message', showBackButton: true, showLogo: true, showNotification: true, notificationCount: 1),
+      appBar: CommonAppBar(title: 'provider.nav.message'.tr(), showBackButton: false, showLogo: true, showNotification: true, notificationCount: 1),
       body: Stack(
         children: [
           // Timeline Line

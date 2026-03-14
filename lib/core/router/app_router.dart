@@ -12,6 +12,7 @@ import '../../features/auth/presentation/screens/terms_of_service_screen.dart';
 import '../../features/auth/presentation/screens/privacy_policy_screen.dart';
 import '../../features/home/presentation/screens/main_screen.dart';
 import '../../features/home/presentation/screens/provider_main_screen.dart';
+import '../../features/home/presentation/screens/edit_calendar_screen.dart';
 import '../../features/projects/presentation/screens/project_list_screen.dart';
 import '../../features/projects/presentation/screens/create_project_screen.dart';
 import '../../features/projects/presentation/screens/project_details_screen.dart';
@@ -30,10 +31,16 @@ import '../../features/profile/presentation/screens/reset_password_screen.dart' 
 import '../../features/profile/presentation/screens/privacy_policy_screen.dart' as profile;
 import '../../features/profile/presentation/screens/terms_of_services_screen.dart' as profile;
 import '../../features/profile/presentation/screens/about_us_screen.dart' as profile;
+import '../../features/profile/presentation/screens/provider_profile_info_screen.dart';
+import '../../features/profile/presentation/screens/edit_personal_info_screen.dart';
+import '../../features/profile/presentation/screens/notification_preference_screen.dart';
+import '../../features/profile/presentation/screens/accepted_projects_screen.dart';
+import '../../features/profile/presentation/screens/provider_favorites_screen.dart';
+import '../../features/profile/presentation/screens/subscription_plans_screen.dart';
 import '../../features/projects/domain/models/project.dart';
 
 final appRouter = GoRouter(
-  initialLocation: '/splash',
+  initialLocation: '/provider-home',
   routes: [
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
     GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
@@ -62,6 +69,7 @@ final appRouter = GoRouter(
     GoRoute(path: '/media', builder: (context, state) => const MediaScreen()),
     GoRoute(path: '/professional-setup', builder: (context, state) => const ProfessionalSetupScreen()),
     GoRoute(path: '/provider-home', builder: (context, state) => const ProviderMainScreen()),
+    GoRoute(path: '/edit-calendar', builder: (context, state) => const EditCalendarScreen()),
     GoRoute(path: '/profile', builder: (context, state) => const profile.ProfileScreen()),
     GoRoute(path: '/personal-info', builder: (context, state) => const profile.PersonalInfoScreen()),
     GoRoute(path: '/settings', builder: (context, state) => const profile.SettingsScreen()),
@@ -70,5 +78,11 @@ final appRouter = GoRouter(
     GoRoute(path: '/privacy-policy', builder: (context, state) => const profile.PrivacyPolicyScreen()),
     GoRoute(path: '/terms-of-service', builder: (context, state) => const profile.TermsOfServiceScreen()),
     GoRoute(path: '/about-us', builder: (context, state) => const profile.AboutUsScreen()),
+    GoRoute(path: '/provider-profile-info', builder: (context, state) => const ProviderProfileInfoScreen()),
+    GoRoute(path: '/edit-personal-info', builder: (context, state) => const EditPersonalInfoScreen()),
+    GoRoute(path: '/notification-preference', builder: (context, state) => const NotificationPreferenceScreen()),
+    GoRoute(path: '/accepted-projects', builder: (context, state) => const AcceptedProjectsScreen()),
+    GoRoute(path: '/provider-favorites', builder: (context, state) => const ProviderFavoritesScreen()),
+    GoRoute(path: '/subscription-plans', builder: (context, state) => const SubscriptionPlansScreen()),
   ],
 );

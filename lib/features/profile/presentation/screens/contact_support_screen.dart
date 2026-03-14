@@ -1,8 +1,9 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/common_app_bar.dart';
 
 class ContactSupportScreen extends StatefulWidget {
   const ContactSupportScreen({super.key});
@@ -24,19 +25,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        leading: IconButton(
-          icon: const Icon(LucideIcons.chevronLeft, color: Colors.black),
-          onPressed: () => context.pop(),
-        ),
-        title: Text(
-          'Contact Support',
-          style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.black),
-        ),
-        centerTitle: true,
-      ),
+      appBar: CommonAppBar(title: 'provider.profile.contact_support_title'.tr(), showNotification: false),
       body: Column(
         children: [
           Expanded(
@@ -121,7 +110,7 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                     child: TextField(
                       controller: _messageController,
                       decoration: InputDecoration(
-                        hintText: 'Type your message',
+                        hintText: 'provider.profile.message_hint'.tr(),
                         hintStyle: GoogleFonts.outfit(color: Colors.black38, fontSize: 14),
                         border: InputBorder.none,
                       ),

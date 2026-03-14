@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lucide_icons/lucide_icons.dart';
-import 'package:go_router/go_router.dart';
+import '../../../../core/widgets/common_app_bar.dart';
 
 class PrivacyPolicyScreen extends StatelessWidget {
   const PrivacyPolicyScreen({super.key});
@@ -10,19 +9,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, color: Colors.black, size: 20),
-          onPressed: () => context.pop(),
-        ),
-        title: Text(
-          'Privacy Policy',
-          style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.black),
-        ),
-        centerTitle: true,
-      ),
+      appBar: const CommonAppBar(title: 'Privacy Policy', showNotification: false),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         child: Container(

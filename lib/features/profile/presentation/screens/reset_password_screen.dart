@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -54,15 +55,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Reset Password',
+                          'settings.reset_password_title'.tr(),
                           style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
                         ),
                         const SizedBox(height: 24),
-                        _buildPasswordField(hint: 'Enter Old Password', obscure: _obscureOld, onToggle: () => setState(() => _obscureOld = !_obscureOld)),
+                        _buildPasswordField(hint: 'settings.enter_old_password'.tr(), obscure: _obscureOld, onToggle: () => setState(() => _obscureOld = !_obscureOld)),
                         const SizedBox(height: 16),
-                        _buildPasswordField(hint: 'Enter New Password', obscure: _obscureNew, onToggle: () => setState(() => _obscureNew = !_obscureNew)),
+                        _buildPasswordField(hint: 'settings.enter_new_password'.tr(), obscure: _obscureNew, onToggle: () => setState(() => _obscureNew = !_obscureNew)),
                         const SizedBox(height: 16),
-                        _buildPasswordField(hint: 'Re-enter New Password', obscure: _obscureReenter, onToggle: () => setState(() => _obscureReenter = !_obscureReenter)),
+                        _buildPasswordField(hint: 'settings.reenter_new_password'.tr(), obscure: _obscureReenter, onToggle: () => setState(() => _obscureReenter = !_obscureReenter)),
                       ],
                     ),
                   ),
@@ -70,7 +71,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 const Spacer(),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: PrimaryGradientButton(text: 'Update Password', onPressed: () => context.pop()),
+                  child: PrimaryGradientButton(text: 'settings.update_password'.tr(), onPressed: () => context.pop()),
                 ),
                 const SizedBox(height: 40),
               ],

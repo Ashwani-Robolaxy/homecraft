@@ -194,29 +194,33 @@ class _ChatScreenState extends State<ChatScreen> {
             decoration: const BoxDecoration(color: AppColors.primaryRed, shape: BoxShape.circle),
             child: const Icon(LucideIcons.image, color: Colors.white, size: 20),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.black12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: 'Type your message',
-                        hintStyle: GoogleFonts.outfit(color: Colors.black38, fontSize: 14),
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                  const Icon(LucideIcons.smile, color: Colors.black38, size: 24),
-                ],
+            child: TextField(
+              controller: _messageController,
+              decoration: InputDecoration(
+                hintText: 'Type your message',
+                hintStyle: GoogleFonts.outfit(color: Colors.black38, fontSize: 14),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                suffixIcon: const Padding(
+                  padding: EdgeInsets.only(right: 12),
+                  child: Icon(LucideIcons.smile, color: Colors.black38, size: 24),
+                ),
+                suffixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 24),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: const BorderSide(color: AppColors.primaryRed, width: 1),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: const BorderSide(color: AppColors.primaryRed, width: 1),
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: const BorderSide(color: AppColors.primaryRed, width: 1),
+                ),
               ),
             ),
           ),

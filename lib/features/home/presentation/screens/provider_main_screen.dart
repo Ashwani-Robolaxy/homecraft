@@ -1,9 +1,12 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/common_app_bar.dart';
 import 'message_screen.dart';
 import 'provider_home_screen.dart';
-import '../../../profile/presentation/screens/profile_screen.dart';
+import 'calendar_management_screen.dart';
+import '../../../profile/presentation/screens/provider_profile_screen.dart';
 
 class ProviderMainScreen extends StatefulWidget {
   const ProviderMainScreen({super.key});
@@ -15,7 +18,7 @@ class ProviderMainScreen extends StatefulWidget {
 class _ProviderMainScreenState extends State<ProviderMainScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [const ProviderHomeScreen(), const MessageScreen(), const PlaceholderScreen(title: 'Calendar'), const ProfileScreen()];
+  final List<Widget> _screens = [const ProviderHomeScreen(), const MessageScreen(), const CalendarManagementScreen(), const ProviderProfileScreen()];
 
   @override
   Widget build(BuildContext context) {
@@ -34,11 +37,11 @@ class _ProviderMainScreenState extends State<ProviderMainScreen> {
           unselectedItemColor: AppColors.textSecondary,
           selectedLabelStyle: const TextStyle(fontFamily: 'Outfit', fontSize: 10, fontWeight: FontWeight.bold),
           unselectedLabelStyle: const TextStyle(fontFamily: 'Outfit', fontSize: 10),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(LucideIcons.layers), label: 'Project'),
-            BottomNavigationBarItem(icon: Icon(LucideIcons.messageCircle), label: 'Message'),
-            BottomNavigationBarItem(icon: Icon(LucideIcons.calendar), label: 'Calendar'),
-            BottomNavigationBarItem(icon: Icon(LucideIcons.user), label: 'Profile'),
+          items: [
+            BottomNavigationBarItem(icon: const Icon(LucideIcons.layers), label: 'provider.nav.project'.tr()),
+            BottomNavigationBarItem(icon: const Icon(LucideIcons.messageCircle), label: 'provider.nav.message'.tr()),
+            BottomNavigationBarItem(icon: const Icon(LucideIcons.calendar), label: 'provider.nav.calendar'.tr()),
+            BottomNavigationBarItem(icon: const Icon(LucideIcons.user), label: 'provider.nav.profile'.tr()),
           ],
         ),
       ),
@@ -53,7 +56,7 @@ class PlaceholderScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: CommonAppBar(title: title, showBackButton: false, showNotification: false),
       body: Center(child: Text('$title Screen Placeholder')),
     );
   }
