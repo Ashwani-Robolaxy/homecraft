@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart' as fba;
 
 import '../../domain/models/app_user.dart';
+import '../../domain/models/provider_profile.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
 
@@ -104,6 +105,23 @@ class AuthRepositoryImpl implements AuthRepository {
       final uid = _ds.currentFirebaseUser?.uid;
       if (uid == null) return (user: null, errorMessage: 'auth.errors.generic');
       await _ds.updateProfile(displayName: displayName, phone: phone, city: city);
+      final appUser = await _ds.getUserDocument(uid);
+      return (user: appUser, errorMessage: null);
+    } catch (_) {
+      return (user: null, errorMessage: 'auth.errors.network');
+    }
+  }
+
+  @override
+  Future<AuthResult> updateProviderProfile(ProviderProfile profile) async {
+    try {
+      final uid = _ds.currentFirebaseUser?.uid;
+      if (uid == null) return (user: null, errorMessage: 'auth.errors.generic');
+      final current = await _ds.getUserDocument(uid);
+      if (current == null || !current.isProvider) {
+        return (user: null, errorMessage: 'auth.errors.generic');
+      }
+      await _ds.updateProviderProfile(current, profile);
       final appUser = await _ds.getUserDocument(uid);
       return (user: appUser, errorMessage: null);
     } catch (_) {

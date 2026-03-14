@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/common_app_bar.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
+import '../../domain/models/provider_profile.dart';
 import '../providers/auth_provider.dart';
 
 class ProfessionalSetupScreen extends ConsumerStatefulWidget {
@@ -20,10 +21,22 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
   final _userNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _contactMailController = TextEditingController();
+  final _companyNameController = TextEditingController();
+  final _companyAddressController = TextEditingController();
+  final _postalCodeController = TextEditingController();
+  final _siretController = TextEditingController();
+  final _websiteController = TextEditingController();
+  final _searchLocationController = TextEditingController();
+  final _socialInstagramController = TextEditingController();
+  final _socialFacebookController = TextEditingController();
+  final _socialTwitterController = TextEditingController();
+  final _socialLinkedinController = TextEditingController();
   bool _dataLoaded = false;
+  bool _saving = false;
   String? _selectedSpecialty;
-  final List<String> _serviceAreas = ['New York', 'Paris', 'Paris', 'New York', 'New York'];
+  List<String> _serviceAreas = [];
 
   final List<Map<String, dynamic>> _specialties = [
     {'name': 'Carpenters', 'icon': LucideIcons.hammer},
@@ -39,7 +52,18 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
     _userNameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _descriptionController.dispose();
     _contactMailController.dispose();
+    _companyNameController.dispose();
+    _companyAddressController.dispose();
+    _postalCodeController.dispose();
+    _siretController.dispose();
+    _websiteController.dispose();
+    _searchLocationController.dispose();
+    _socialInstagramController.dispose();
+    _socialFacebookController.dispose();
+    _socialTwitterController.dispose();
+    _socialLinkedinController.dispose();
     super.dispose();
   }
 
@@ -52,7 +76,70 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
       _phoneController.text = user.phone ?? '';
       _addressController.text = user.city ?? '';
       _contactMailController.text = user.email;
+      final p = user.providerProfile;
+      if (p != null) {
+        _descriptionController.text = p.description ?? '';
+        _selectedSpecialty = p.specialty;
+        _companyNameController.text = p.companyName ?? '';
+        _contactMailController.text = p.contactMail?.isNotEmpty == true ? p.contactMail! : user.email;
+        _companyAddressController.text = p.companyAddress ?? '';
+        _postalCodeController.text = p.postalCode ?? '';
+        _siretController.text = p.siret ?? '';
+        _serviceAreas = List.from(p.serviceAreas);
+        _websiteController.text = p.website ?? '';
+        _socialInstagramController.text = p.socialInstagram ?? '';
+        _socialFacebookController.text = p.socialFacebook ?? '';
+        _socialTwitterController.text = p.socialTwitter ?? '';
+        _socialLinkedinController.text = p.socialLinkedin ?? '';
+      }
     }
+  }
+
+  Future<void> _submitProfile() async {
+    final displayName = _userNameController.text.trim();
+    if (displayName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your name'),
+          backgroundColor: AppColors.primaryRed,
+        ),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    final profile = ProviderProfile(
+      displayName: displayName,
+      phone: _phoneController.text.trim(),
+      address: _addressController.text.trim(),
+      description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+      specialty: _selectedSpecialty,
+      companyName: _companyNameController.text.trim().isEmpty ? null : _companyNameController.text.trim(),
+      contactMail: _contactMailController.text.trim().isEmpty ? null : _contactMailController.text.trim(),
+      companyAddress: _companyAddressController.text.trim().isEmpty ? null : _companyAddressController.text.trim(),
+      postalCode: _postalCodeController.text.trim().isEmpty ? null : _postalCodeController.text.trim(),
+      siret: _siretController.text.trim().isEmpty ? null : _siretController.text.trim(),
+      serviceAreas: _serviceAreas,
+      website: _websiteController.text.trim().isEmpty ? null : _websiteController.text.trim(),
+      socialInstagram: _socialInstagramController.text.trim().isEmpty ? null : _socialInstagramController.text.trim(),
+      socialFacebook: _socialFacebookController.text.trim().isEmpty ? null : _socialFacebookController.text.trim(),
+      socialTwitter: _socialTwitterController.text.trim().isEmpty ? null : _socialTwitterController.text.trim(),
+      socialLinkedin: _socialLinkedinController.text.trim().isEmpty ? null : _socialLinkedinController.text.trim(),
+    );
+    final result = await ref.read(authRepositoryProvider).updateProviderProfile(profile);
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (result.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.errorMessage!),
+          backgroundColor: AppColors.primaryRed,
+        ),
+      );
+      return;
+    }
+    await ref.read(authStateNotifierProvider).refresh();
+    if (!mounted) return;
+    context.go('/provider-home');
   }
 
   @override
@@ -84,19 +171,19 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
               const SizedBox(height: 32),
               _buildSectionTitle('Company Info.'),
               _buildLabel('Company name*'),
-              _buildTextField(hint: 'ABCD'),
+              _buildTextField(controller: _companyNameController, hint: 'Company name'),
               const SizedBox(height: 12),
               _buildLabel('Contact Mail*'),
               _buildTextField(controller: _contactMailController, hint: 'Contact email'),
               const SizedBox(height: 12),
               _buildLabel('Address*'),
-              _buildTextField(hint: 'Address', icon: LucideIcons.mapPin),
+              _buildTextField(controller: _companyAddressController, hint: 'Address', icon: LucideIcons.mapPin),
               const SizedBox(height: 12),
               _buildLabel('Postal Code'),
-              _buildTextField(hint: '655545'),
+              _buildTextField(controller: _postalCodeController, hint: 'Postal code'),
               const SizedBox(height: 12),
               _buildLabel('SIRET number *'),
-              _buildTextField(hint: '123456'),
+              _buildTextField(controller: _siretController, hint: 'SIRET number'),
               const SizedBox(height: 24),
               _buildUploadButton('Upload KBIS (Optional)'),
 
@@ -120,7 +207,7 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
               _buildAddButton('Add Area'),
               const SizedBox(height: 24),
               _buildLabel('Website or Pages URL'),
-              _buildTextField(hint: 'https://yourpageurl.com'),
+              _buildTextField(controller: _websiteController, hint: 'https://yourpageurl.com'),
               const SizedBox(height: 24),
               _buildLabel('Add social links'),
               _buildSocialLinks(),
@@ -128,9 +215,10 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
               const SizedBox(height: 48),
               PrimaryGradientButton(
                 text: 'Submit',
+                isLoading: _saving,
                 onPressed: () {
                   if (_formKey.currentState!.validate()) {
-                    context.go('/provider-home');
+                    _submitProfile();
                   }
                 },
               ),
@@ -194,6 +282,7 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
         Text('Write short description about you.', style: GoogleFonts.outfit(fontSize: 13, color: Colors.black54)),
         const SizedBox(height: 8),
         TextFormField(
+          controller: _descriptionController,
           maxLines: 4,
           decoration: InputDecoration(
             hintText: 'Write about you................',
@@ -294,16 +383,19 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
       spacing: 8,
       runSpacing: 8,
       children: _serviceAreas.map((area) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: const Color(0xFFF2E7E7), borderRadius: BorderRadius.circular(8)),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(area, style: GoogleFonts.outfit(fontSize: 12, color: Colors.black54)),
-              const SizedBox(width: 4),
-              const Icon(LucideIcons.x, size: 12, color: Colors.black26),
-            ],
+        return GestureDetector(
+          onTap: () => setState(() => _serviceAreas.remove(area)),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(color: const Color(0xFFF2E7E7), borderRadius: BorderRadius.circular(8)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(area, style: GoogleFonts.outfit(fontSize: 12, color: Colors.black54)),
+                const SizedBox(width: 4),
+                const Icon(LucideIcons.x, size: 12, color: Colors.black26),
+              ],
+            ),
           ),
         );
       }).toList(),
@@ -312,6 +404,7 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
 
   Widget _buildLocationSearch() {
     return TextFormField(
+      controller: _searchLocationController,
       decoration: InputDecoration(
         hintText: 'Search location',
         hintStyle: GoogleFonts.outfit(color: Colors.black26, fontSize: 14),
@@ -333,14 +426,25 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
   }
 
   Widget _buildAddButton(String text) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(color: const Color(0xFF7A0000), borderRadius: BorderRadius.circular(12)),
-      child: Center(
-        child: Text(
-          text,
-          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+    return GestureDetector(
+      onTap: () {
+        final loc = _searchLocationController.text.trim();
+        if (loc.isNotEmpty && !_serviceAreas.contains(loc)) {
+          setState(() {
+            _serviceAreas = [..._serviceAreas, loc];
+            _searchLocationController.clear();
+          });
+        }
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(color: const Color(0xFF7A0000), borderRadius: BorderRadius.circular(12)),
+        child: Center(
+          child: Text(
+            text,
+            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+          ),
         ),
       ),
     );
@@ -349,18 +453,18 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
   Widget _buildSocialLinks() {
     return Column(
       children: [
-        _buildSocialInput(LucideIcons.instagram),
+        _buildSocialInput(LucideIcons.instagram, _socialInstagramController),
         const SizedBox(height: 12),
-        _buildSocialInput(LucideIcons.facebook),
+        _buildSocialInput(LucideIcons.facebook, _socialFacebookController),
         const SizedBox(height: 12),
-        _buildSocialInput(LucideIcons.twitter),
+        _buildSocialInput(LucideIcons.twitter, _socialTwitterController),
         const SizedBox(height: 12),
-        _buildSocialInput(LucideIcons.linkedin),
+        _buildSocialInput(LucideIcons.linkedin, _socialLinkedinController),
       ],
     );
   }
 
-  Widget _buildSocialInput(IconData icon) {
+  Widget _buildSocialInput(IconData icon, TextEditingController controller) {
     return Row(
       children: [
         Container(
@@ -376,6 +480,7 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
         const SizedBox(width: 12),
         Expanded(
           child: TextFormField(
+            controller: controller,
             decoration: InputDecoration(
               hintText: 'https://your social medialinks.com',
               hintStyle: GoogleFonts.outfit(color: Colors.black26, fontSize: 12),

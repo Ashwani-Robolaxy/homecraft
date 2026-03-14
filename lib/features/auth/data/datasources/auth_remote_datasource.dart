@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../domain/models/app_user.dart';
+import '../../domain/models/provider_profile.dart';
 
 /// Firebase Auth + Firestore data source for auth.
 class AuthRemoteDatasource {
@@ -91,6 +92,21 @@ class AuthRemoteDatasource {
     if (city != null) {
       data['city'] = city.trim().isEmpty ? FieldValue.delete() : city.trim();
     }
+    await _firestore.collection(_usersCollection).doc(user.uid).update(data);
+  }
+
+  /// Update provider profile (full profile setup) in Firestore. Also updates displayName, phone, city at top level.
+  Future<void> updateProviderProfile(AppUser appUser, ProviderProfile profile) async {
+    final user = _auth.currentUser;
+    if (user == null || user.uid != appUser.uid) return;
+    await user.updateDisplayName(profile.displayName.trim());
+    final data = <String, dynamic>{
+      'displayName': profile.displayName.trim(),
+      'phone': profile.phone.trim().isEmpty ? FieldValue.delete() : profile.phone.trim(),
+      'city': profile.address.trim().isEmpty ? FieldValue.delete() : profile.address.trim(),
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+      'providerProfile': profile.toMap(),
+    };
     await _firestore.collection(_usersCollection).doc(user.uid).update(data);
   }
 }

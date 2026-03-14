@@ -1,4 +1,5 @@
 import '../models/app_user.dart';
+import '../models/provider_profile.dart';
 
 /// Result of auth operations; either [AppUser] or error message.
 typedef AuthResult = ({AppUser? user, String? errorMessage});
@@ -28,6 +29,9 @@ abstract class AuthRepository {
     String? phone,
     String? city,
   });
+
+  /// Update full provider profile (profile setup). Use for provider role only.
+  Future<AuthResult> updateProviderProfile(ProviderProfile profile);
 
   /// Fetch current user from Firestore (for refresh after update).
   Future<AppUser?> getCurrentUser();
