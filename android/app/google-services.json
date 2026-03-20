@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "517194497087",
+    "project_id": "homecraft-robolaxy",
+    "storage_bucket": "homecraft-robolaxy.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:517194497087:android:d89560c19a9b8602534c8a",
+        "android_client_info": {
+          "package_name": "com.example.homecraft"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZZz59m3T5-lYVa_EpLTa_21_3Mm6bf8w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,8 +1,0 @@
-{
-  "firestore": {
-    "rules": "firestore.rules"
-  },
-  "flutter":{"platforms":{"android":{"default":{"projectId":"homecraft-robolaxy","appId":"1:517194497087:android:d89560c19a9b8602534c8a","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"homecraft-robolaxy","appId":"1:517194497087:ios:127765213888b9eb534c8a","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"homecraft-robolaxy","configurations":{"android":"1:517194497087:android:d89560c19a9b8602534c8a","ios":"1:517194497087:ios:127765213888b9eb534c8a"}}
-  }}
-  }
-}

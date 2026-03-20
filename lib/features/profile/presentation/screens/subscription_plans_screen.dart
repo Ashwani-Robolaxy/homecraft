@@ -8,11 +8,7 @@ import '../../../../core/constants/app_colors.dart';
 class SubscriptionPlansScreen extends StatelessWidget {
   const SubscriptionPlansScreen({super.key});
 
-  static const List<String> _introPointKeys = [
-    'provider.profile.choose_plans',
-    'provider.profile.showcase_skills',
-    'provider.profile.let_start_work',
-  ];
+  static const List<String> _introPointKeys = ['provider.profile.choose_plans', 'provider.profile.showcase_skills', 'provider.profile.let_start_work'];
 
   static const List<String> _premiumFeatures = [
     'Full profile & portfolio',
@@ -36,17 +32,10 @@ class SubscriptionPlansScreen extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black,
-                  AppColors.primaryRed.withValues(alpha: 0.2),
-                  AppColors.primaryRed.withValues(alpha: 0.15),
-                ],
+                colors: [Colors.black, AppColors.primaryRed.withValues(alpha: 0.2), AppColors.primaryRed.withValues(alpha: 0.15)],
               ),
             ),
-            child: CustomPaint(
-              painter: _RedWavesPainter(),
-              size: Size.infinite,
-            ),
+            child: CustomPaint(painter: _RedWavesPainter(), size: Size.infinite),
           ),
           SafeArea(
             child: Column(
@@ -58,16 +47,21 @@ class SubscriptionPlansScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ..._introPointKeys.map((key) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Row(
-                                children: [
-                                  const Icon(LucideIcons.check, color: AppColors.primaryRed, size: 22),
-                                  const SizedBox(width: 12),
-                                  Text(key.tr(), style: GoogleFonts.outfit(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            )),
+                        ..._introPointKeys.map(
+                          (key) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              children: [
+                                const Icon(LucideIcons.check, color: AppColors.primaryRed, size: 22),
+                                const SizedBox(width: 12),
+                                Text(
+                                  key.tr(),
+                                  style: GoogleFonts.outfit(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 24),
                         SizedBox(
                           width: double.infinity,
@@ -131,20 +125,30 @@ class SubscriptionPlansScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('provider.profile.premium_plan'.tr(), style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.primaryRed)),
+          Text(
+            'provider.profile.premium_plan'.tr(),
+            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.primaryRed),
+          ),
           const SizedBox(height: 4),
-          Text('provider.profile.per_month'.tr(), style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.primaryRed)),
+          Text(
+            'provider.profile.per_month'.tr(),
+            style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.primaryRed),
+          ),
           const SizedBox(height: 20),
-          ..._premiumFeatures.map((f) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    const Icon(LucideIcons.check, color: Color(0xFF4CAF50), size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(f, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMain))),
-                  ],
-                ),
-              )),
+          ..._premiumFeatures.map(
+            (f) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  const Icon(LucideIcons.check, color: Color(0xFF4CAF50), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(f, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMain)),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
