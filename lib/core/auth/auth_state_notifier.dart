@@ -19,7 +19,7 @@ class AuthStateNotifier extends ChangeNotifier {
   AppUser? _user;
   AppUser? get currentUser => _user;
 
-  /// Re-fetch current user from Firestore (e.g. after profile update).
+  /// Re-fetch current user from backend/session (e.g. after profile update).
   Future<void> refresh() async {
     _user = await _repo.getCurrentUser();
     notifyListeners();

@@ -1,8 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart' as fba;
-
 import '../../domain/models/app_user.dart';
 import '../../domain/models/provider_profile.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../../../core/network/api_exception.dart';
 import '../datasources/auth_remote_datasource.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
@@ -12,41 +11,28 @@ class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDatasource _ds;
 
   @override
-  Stream<AppUser?> get authStateChanges async* {
-    await for (final user in _ds.authStateChanges) {
-      if (user == null) {
-        yield null;
-      } else {
-        final appUser = await _ds.getUserDocument(user.uid);
-        yield appUser;
-      }
-    }
-  }
+  Stream<AppUser?> get authStateChanges => _ds.authStateChanges;
 
   @override
-  AppUser? get currentUser => null; // Sync current user would require a cache; we use stream.
+  AppUser? get currentUser => _ds.currentUser;
 
   @override
   Future<AuthResult> signInWithEmailAndPassword({
     required String email,
     required String password,
+    UserRole? role,
   }) async {
     try {
-      await _ds.signInWithEmailAndPassword(email: email, password: password);
-      final fbUser = _ds.currentFirebaseUser;
-      if (fbUser == null) {
-        return (user: null, errorMessage: 'auth.errors.generic');
-      }
-      final appUser = await _ds.getUserDocument(fbUser.uid);
-      if (appUser == null) {
-        await _ds.signOut();
-        return (user: null, errorMessage: 'auth.errors.generic');
-      }
+      final appUser = await _ds.login(
+        email: email,
+        password: password,
+        role: role ?? UserRole.client,
+      );
       return (user: appUser, errorMessage: null);
-    } on fba.FirebaseAuthException catch (e) {
-      return (user: null, errorMessage: _mapAuthException(e.code));
+    } on ApiException catch (e) {
+      return (user: null, errorMessage: _friendlyError(e.message));
     } catch (_) {
-      return (user: null, errorMessage: 'auth.errors.network');
+      return (user: null, errorMessage: 'Network error. Check your connection.');
     }
   }
 
@@ -58,37 +44,78 @@ class AuthRepositoryImpl implements AuthRepository {
     required UserRole role,
   }) async {
     try {
-      await _ds.createUserWithEmailAndPassword(email: email, password: password);
-      final fbUser = _ds.currentFirebaseUser;
-      if (fbUser == null) {
-        return (user: null, errorMessage: 'auth.errors.generic');
-      }
-      await _ds.setDisplayName(displayName);
-      final appUser = AppUser(
-        uid: fbUser.uid,
-        email: fbUser.email ?? email,
-        displayName: displayName.trim(),
+      final appUser = await _ds.register(
+        email: email,
+        password: password,
+        displayName: displayName,
         role: role,
-        createdAt: DateTime.now(),
       );
-      await _ds.setUserDocument(appUser);
       return (user: appUser, errorMessage: null);
-    } on fba.FirebaseAuthException catch (e) {
-      return (user: null, errorMessage: _mapAuthException(e.code));
+    } on ApiException catch (e) {
+      return (user: null, errorMessage: _friendlyError(e.message));
     } catch (_) {
-      return (user: null, errorMessage: 'auth.errors.network');
+      return (user: null, errorMessage: 'Network error. Check your connection.');
     }
   }
 
   @override
-  Future<String?> sendPasswordResetEmail(String email) async {
+  Future<String?> sendPasswordResetEmail(String email, {UserRole role = UserRole.client}) async {
     try {
-      await _ds.sendPasswordResetEmail(email);
+      await _ds.sendForgotPassword(email: email, role: role);
       return null;
-    } on fba.FirebaseAuthException catch (e) {
-      return _mapAuthException(e.code);
+    } on ApiException catch (e) {
+      return _friendlyError(e.message);
     } catch (_) {
-      return 'auth.errors.network';
+      return 'Network error. Check your connection.';
+    }
+  }
+
+  @override
+  Future<AuthResult> socialLogin({
+    required String provider,
+    required String idToken,
+    required UserRole role,
+  }) async {
+    try {
+      final user = await _ds.socialLogin(provider: provider, idToken: idToken, role: role);
+      return (user: user, errorMessage: null);
+    } on ApiException catch (e) {
+      return (user: null, errorMessage: _friendlyError(e.message));
+    } catch (_) {
+      return (user: null, errorMessage: 'Network error. Check your connection.');
+    }
+  }
+
+  @override
+  Future<String?> verifyResetOtp({
+    required String email,
+    required String otp,
+    required UserRole role,
+  }) async {
+    try {
+      await _ds.verifyResetOtp(email: email, otp: otp, role: role);
+      return null;
+    } on ApiException catch (e) {
+      return _friendlyError(e.message);
+    } catch (_) {
+      return 'Network error. Check your connection.';
+    }
+  }
+
+  @override
+  Future<String?> resetPassword({
+    required String email,
+    required String otp,
+    required String password,
+    required UserRole role,
+  }) async {
+    try {
+      await _ds.resetPassword(email: email, otp: otp, password: password, role: role);
+      return null;
+    } on ApiException catch (e) {
+      return _friendlyError(e.message);
+    } catch (_) {
+      return 'Network error. Check your connection.';
     }
   }
 
@@ -102,57 +129,47 @@ class AuthRepositoryImpl implements AuthRepository {
     String? city,
   }) async {
     try {
-      final uid = _ds.currentFirebaseUser?.uid;
-      if (uid == null) return (user: null, errorMessage: 'auth.errors.generic');
-      await _ds.updateProfile(displayName: displayName, phone: phone, city: city);
-      final appUser = await _ds.getUserDocument(uid);
+      await _ds.updateBasicProfile(displayName: displayName, phone: phone, city: city);
+      final appUser = await _ds.getCurrentUser();
       return (user: appUser, errorMessage: null);
+    } on ApiException catch (e) {
+      return (user: null, errorMessage: _friendlyError(e.message));
     } catch (_) {
-      return (user: null, errorMessage: 'auth.errors.network');
+      return (user: null, errorMessage: 'Network error. Check your connection.');
     }
   }
 
   @override
   Future<AuthResult> updateProviderProfile(ProviderProfile profile) async {
     try {
-      final uid = _ds.currentFirebaseUser?.uid;
-      if (uid == null) return (user: null, errorMessage: 'auth.errors.generic');
-      final current = await _ds.getUserDocument(uid);
-      if (current == null || !current.isProvider) {
-        return (user: null, errorMessage: 'auth.errors.generic');
-      }
-      await _ds.updateProviderProfile(current, profile);
-      final appUser = await _ds.getUserDocument(uid);
+      await _ds.completeProviderProfile(profile);
+      final appUser = await _ds.getCurrentUser();
       return (user: appUser, errorMessage: null);
+    } on ApiException catch (e) {
+      return (user: null, errorMessage: _friendlyError(e.message));
     } catch (_) {
-      return (user: null, errorMessage: 'auth.errors.network');
+      return (user: null, errorMessage: 'Network error. Check your connection.');
     }
   }
 
   @override
   Future<AppUser?> getCurrentUser() async {
-    final uid = _ds.currentFirebaseUser?.uid;
-    if (uid == null) return null;
-    return _ds.getUserDocument(uid);
+    return _ds.getCurrentUser();
   }
 
-  String _mapAuthException(String code) {
-    switch (code) {
-      case 'user-not-found':
-        return 'auth.errors.user_not_found';
-      case 'wrong-password':
-      case 'invalid-credential':
-        return 'auth.errors.wrong_password';
-      case 'email-already-in-use':
-        return 'auth.errors.email_already_in_use';
-      case 'invalid-email':
-        return 'auth.errors.invalid_email';
-      case 'weak-password':
-        return 'auth.errors.weak_password';
-      case 'too-many-requests':
-        return 'auth.errors.too_many_requests';
-      default:
-        return 'auth.errors.generic';
+  String _friendlyError(String raw) {
+    final msg = raw.trim();
+    final lower = msg.toLowerCase();
+    if (lower.contains('invalid login: 535') ||
+        lower.contains('badcredentials') ||
+        lower.contains('smtp')) {
+      return 'Reset email service is temporarily unavailable. Please try again later.';
     }
+    // MySQL: Table 'service_backend.professionals' doesn't exist (quotes in message).
+    if (lower.contains('service_backend.professionals') &&
+        (lower.contains("doesn't exist") || lower.contains('does not exist'))) {
+      return 'Professional accounts are temporarily unavailable. Please try again later or contact support.';
+    }
+    return msg;
   }
 }

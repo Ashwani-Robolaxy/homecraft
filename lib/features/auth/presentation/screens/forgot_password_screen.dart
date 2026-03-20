@@ -7,6 +7,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
+import '../../domain/models/app_user.dart';
 import '../providers/auth_provider.dart';
 import '../utils/auth_validators.dart';
 import '../widgets/custom_text_field.dart';
@@ -32,8 +33,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
+    final roleParam = GoRouterState.of(context).uri.queryParameters['role'];
+    final role = roleParam == 'provider' ? UserRole.provider : UserRole.client;
     final repo = ref.read(authRepositoryProvider);
-    final errorKey = await repo.sendPasswordResetEmail(_emailController.text.trim());
+    final errorKey = await repo.sendPasswordResetEmail(_emailController.text.trim(), role: role);
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (errorKey != null) {
@@ -47,7 +50,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           backgroundColor: Colors.green,
         ),
       );
-      context.pop();
+      final roleValue = role == UserRole.provider ? 'provider' : 'client';
+      context.push(
+        '/verify-otp?email=${Uri.encodeComponent(_emailController.text.trim())}&role=$roleValue',
+      );
     }
   }
 

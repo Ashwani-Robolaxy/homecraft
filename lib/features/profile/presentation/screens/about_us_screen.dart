@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/widgets/common_app_bar.dart';
+import '../../../content/presentation/providers/content_provider.dart';
 
-class AboutUsScreen extends StatelessWidget {
+class AboutUsScreen extends ConsumerWidget {
   const AboutUsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final faqs = ref.watch(faqProvider);
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: const CommonAppBar(title: 'About Us', showNotification: false),
+      appBar: const CommonAppBar(title: 'FAQ - ABOUT US', showNotification: false),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         child: Container(
@@ -23,15 +26,52 @@ class AboutUsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Our Introduction',
+                'Frequently Asked Questions',
                 style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black),
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: SingleChildScrollView(
-                  child: Text(
-                    'Lorem ipsum dolor sit amet consectetur. Lacus at venenatis gravida vivamus mauris. Quisque mi est vel dis. Donec rhoncus laoreet odio orci sed risus elit accumsan. Mattis ut est tristique amet vitae at aliquet. Ac vel porttitor egestas scelerisque enim quisque senectus. Euismod ultricies vulputate id cras bibendum sollicitudin proin odio bibendum. Velit velit in scelerisque erat etiam rutrum phasellus nunc. Sed lectus sed a at et eget. Nunc purus sed quis at risus. Consectetur nibh justo proin placerat condimentum id at adipiscing.\n\nVel blandit mi nulla sodales consectetur. Egestas tristique ultrices gravida duis nisl odio. Posuere curabitur eu platea pellentesque ut. Facilisi elementum neque mauris facilisis in. Cursus condimentum ipsum pretium consequat turpis at porttitor nisi.\n\nScelerisque tellus praesent condimentum euismod a faucibus. Auctor at ultricies at urna aliquam massa pellentesque. Vitae vulputate nullam diam placerat at magna egestas. Lectus lectus condimentum ipsum pretium consequat turpis at imperdiet lobortis dui. Nunc tellus cursus maecenas phasellus sollicitudin donec dictum.',
-                    style: GoogleFonts.outfit(fontSize: 14, color: Colors.black54, height: 1.5),
+                child: faqs.when(
+                  data: (items) {
+                    if (items.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No FAQs available right now.',
+                          style: GoogleFonts.outfit(fontSize: 14, color: Colors.black54),
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final f = items[index];
+                        return ExpansionTile(
+                          tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+                          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                          title: Text(
+                            f.question,
+                            style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                          ),
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                f.answer,
+                                style: GoogleFonts.outfit(fontSize: 14, color: Colors.black54, height: 1.5),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (_, __) => Center(
+                    child: Text(
+                      'Unable to load FAQs right now.',
+                      style: GoogleFonts.outfit(fontSize: 14, color: Colors.black54),
+                    ),
                   ),
                 ),
               ),

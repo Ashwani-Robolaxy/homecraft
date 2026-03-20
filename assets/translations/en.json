@@ -62,6 +62,7 @@
       "title": "Create Your Account",
       "subtitle": "Create your account to explore HomeCraft",
       "username": "User name",
+      "professional_full_name_hint": "First and last name",
       "email": "Input your email",
       "password": "Password",
       "confirm_password": "Confirm password",
@@ -123,7 +124,8 @@
       "password_confirm": "Passwords do not match",
       "username_required": "Name is required",
       "username_min": "Name must be at least 2 characters",
-      "terms_required": "You must accept the terms and conditions"
+      "terms_required": "You must accept the terms and conditions",
+      "professional_name_two_parts": "Enter first and last name (e.g. John Smith)."
     },
     "errors": {
       "generic": "Something went wrong. Please try again.",

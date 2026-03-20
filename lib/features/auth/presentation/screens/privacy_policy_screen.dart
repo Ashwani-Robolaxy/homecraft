@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../content/presentation/providers/content_provider.dart';
 
 import '../../../../core/widgets/common_app_bar.dart';
 
-class PrivacyPolicyScreen extends StatefulWidget {
+class PrivacyPolicyScreen extends ConsumerStatefulWidget {
   const PrivacyPolicyScreen({super.key});
 
   @override
-  State<PrivacyPolicyScreen> createState() => _PrivacyPolicyScreenState();
+  ConsumerState<PrivacyPolicyScreen> createState() => _PrivacyPolicyScreenState();
 }
 
-class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
+class _PrivacyPolicyScreenState extends ConsumerState<PrivacyPolicyScreen> {
   bool _isAgreed = false;
 
   @override
   Widget build(BuildContext context) {
+    final privacy = ref.watch(privacyProvider);
     return Scaffold(
       backgroundColor: AppColors.backgroundWhite,
       appBar: const CommonAppBar(title: 'Privacy Policy', showLogo: false, showNotification: false),
@@ -42,13 +45,20 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                         border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
                         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 5))],
                       ),
-                      child: const SingleChildScrollView(
-                        child: Text(
-                          "Lorem ipsum dolor sit amet consectetur. Lacus at venenatis gravida vivamus mauris. Quisque mi est vel dis. Donec rhoncus laoreet odio orci sed risus elit accumsan. Mattis ut est tristique amet vitae at aliquet. Ac vel porttitor egestas scelerisque enim quisque senectus. Euismod ultricies vulputate id cras bibendum sollicitudin proin odio bibendum. Velit velit in scelerisque erat etiam rutrum phasellus nunc. Sed lectus sed a at et eget. Nunc purus sed quis at risus. Consectetur nibh justo proin placerat condimentum id at adipiscing.\n\n"
-                          "Vel blandit mi nulla sodales consectetur. Egestas tristique ultrices gravida duis nisl odio. Posuere curabitur eu platea pellentesque ut. Facilisi elementum neque mauris facilisis in. Cursus condimentum ipsum pretium consequat turpis at porttitor nisi.\n\n"
-                          "Scelerisque tellus praesent condimentum euismod a faucibus. Auctor at ultricies at urna aliquam massa pellentesque. Vitae vulputate nullam diam placerat at magna egestas. Lectus lectus consequat porta lectus purus. Nulla duis sem sit at imperdiet lobortis dui. Nunc tellus cursus maecenas phasellus sollicitudin donec dictum. Sodales in faucibus libero augue vestibulum urna mattis curabitur. Sed nullam consectetur euismod a laoreet dui. Nulla porttitor urna id blandit.\n\n"
-                          "Pretium pulvinar morbi suspendisse mattis.",
-                          style: TextStyle(fontFamily: 'Outfit', fontSize: 14, height: 1.6, color: AppColors.textSecondary),
+                      child: SingleChildScrollView(
+                        child: privacy.when(
+                          data: (data) => Text(
+                            data.content,
+                            style: const TextStyle(fontFamily: 'Outfit', fontSize: 14, height: 1.6, color: AppColors.textSecondary),
+                          ),
+                          loading: () => const Center(child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: CircularProgressIndicator(color: AppColors.primaryRed),
+                          )),
+                          error: (_, __) => const Text(
+                            'Unable to load privacy policy right now.',
+                            style: TextStyle(fontFamily: 'Outfit', fontSize: 14, height: 1.6, color: AppColors.textSecondary),
+                          ),
                         ),
                       ),
                     ),

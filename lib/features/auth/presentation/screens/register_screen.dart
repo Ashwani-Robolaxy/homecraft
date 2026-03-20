@@ -62,8 +62,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (result.errorMessage != null) {
+      final msg = result.errorMessage!;
+      final display = msg.startsWith('auth.') ? msg.tr() : msg;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.errorMessage!.tr()), backgroundColor: AppColors.primaryRed),
+        SnackBar(content: Text(display), backgroundColor: AppColors.primaryRed),
       );
       return;
     }
@@ -117,10 +119,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         Text(tr('auth.register.subtitle'), textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Outfit', fontSize: 16, color: AppColors.textMain.withValues(alpha: 0.7))),
                         const SizedBox(height: 30),
                         CustomTextField(
-                          hintText: tr('auth.register.username'),
+                          hintText: _role == UserRole.provider
+                              ? tr('auth.register.professional_full_name_hint')
+                              : tr('auth.register.username'),
                           prefixIcon: LucideIcons.user,
                           controller: _nameController,
-                          validator: AuthValidators.displayName,
+                          validator: _role == UserRole.provider
+                              ? (v) => AuthValidators.professionalFullName(v, context)
+                              : AuthValidators.displayName,
                         ),
                         const SizedBox(height: 12),
                         CustomTextField(

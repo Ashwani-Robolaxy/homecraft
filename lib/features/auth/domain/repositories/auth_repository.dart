@@ -11,28 +11,34 @@ abstract class AuthRepository {
   /// Current user if logged in.
   AppUser? get currentUser;
 
-  /// Sign in with email and password. Fetches user doc from Firestore for role.
-  Future<AuthResult> signInWithEmailAndPassword({required String email, required String password});
+  /// Sign in with email and password.
+  /// When [role] is provided, login is attempted only for that role.
+  Future<AuthResult> signInWithEmailAndPassword({required String email, required String password, UserRole? role});
 
-  /// Create account and Firestore user doc with [role]. Returns user or error.
+  /// Create account with [role]. Returns user or error.
   Future<AuthResult> registerWithEmailAndPassword({required String email, required String password, required String displayName, required UserRole role});
 
   /// Send password reset email.
-  Future<String?> sendPasswordResetEmail(String email);
+  Future<String?> sendPasswordResetEmail(String email, {UserRole role});
+
+  /// Social login with provider token.
+  Future<AuthResult> socialLogin({required String provider, required String idToken, required UserRole role});
+
+  /// Verify reset OTP.
+  Future<String?> verifyResetOtp({required String email, required String otp, required UserRole role});
+
+  /// Reset password with OTP.
+  Future<String?> resetPassword({required String email, required String otp, required String password, required UserRole role});
 
   /// Sign out.
   Future<void> signOut();
 
-  /// Update profile (Firestore + Firebase Auth). Returns updated user or error.
-  Future<AuthResult> updateProfile({
-    required String displayName,
-    String? phone,
-    String? city,
-  });
+  /// Update basic profile fields.
+  Future<AuthResult> updateProfile({required String displayName, String? phone, String? city});
 
   /// Update full provider profile (profile setup). Use for provider role only.
   Future<AuthResult> updateProviderProfile(ProviderProfile profile);
 
-  /// Fetch current user from Firestore (for refresh after update).
+  /// Fetch current user from API/session for refresh.
   Future<AppUser?> getCurrentUser();
 }

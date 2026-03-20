@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/widgets/common_app_bar.dart';
+import '../../../content/presentation/providers/content_provider.dart';
 
-class TermsOfServiceScreen extends StatelessWidget {
+class TermsOfServiceScreen extends ConsumerWidget {
   const TermsOfServiceScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final terms = ref.watch(termsProvider);
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: const CommonAppBar(title: 'Terms of Services', showNotification: false),
@@ -23,26 +26,25 @@ class TermsOfServiceScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Our Terms of Services',
+                terms.asData?.value.title.isNotEmpty == true ? terms.asData!.value.title : 'Our Terms of Services',
                 style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black),
               ),
               const SizedBox(height: 16),
               Expanded(
                 child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildBulletPoint(
-                        'Lorem ipsum dolor sit amet consectetur. Lacus at venenatis gravida vivamus mauris. Quisque mi est vel dis. Donec rhoncus laoreet odio orci sed risus elit accumsan. Mattis ut est tristique amet vitae at aliquet. Ac vel porttitor egestas scelerisque enim quisque senectus. Euismod ultricies vulputate id cras bibendum sollicitudin proin odio bibendum. Velit velit in scelerisque erat etiam rutrum phasellus nunc. Sed lectus sed a at et eget. Nunc purus sed quis at risus. Consectetur nibh justo proin placerat condimentum id at adipiscing.',
-                      ),
-                      _buildBulletPoint(
-                        'Vel blandit mi nulla sodales consectetur. Egestas tristique ultrices gravida duis nisl odio. Posuere curabitur eu platea pellentesque ut. Facilisi elementum neque mauris facilisis in. Cursus condimentum ipsum pretium consequat turpis at porttitor nisi.',
-                      ),
-                      _buildBulletPoint(
-                        'Scelerisque tellus praesent condimentum euismod a faucibus. Auctor at ultricies at urna aliquam massa pellentesque. Vitae vulputate nullam diam placerat at magna egestas. Lectus lectus condimentum ipsum pretium consequat turpis at imperdiet lobortis dui. Nunc tellus cursus maecenas phasellus sollicitudin donec dictum. Sodales in faucibus libero augue vestibulum urna mattis curabitur. Leo ac pretium elit egestas mi commodo odio neque.',
-                      ),
-                      _buildBulletPoint('Pretium pulvinar morbi suspendisse mattis.'),
-                    ],
+                  child: terms.when(
+                    data: (d) => Text(
+                      d.content,
+                      style: GoogleFonts.outfit(fontSize: 14, color: Colors.black54, height: 1.5),
+                    ),
+                    loading: () => const Center(child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: CircularProgressIndicator(),
+                    )),
+                    error: (_, __) => Text(
+                      'Unable to load terms right now.',
+                      style: GoogleFonts.outfit(fontSize: 14, color: Colors.black54, height: 1.5),
+                    ),
                   ),
                 ),
               ),
@@ -53,22 +55,4 @@ class TermsOfServiceScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBulletPoint(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: Icon(Icons.circle, size: 6, color: Colors.black54),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(text, style: GoogleFonts.outfit(fontSize: 14, color: Colors.black54, height: 1.5)),
-          ),
-        ],
-      ),
-    );
-  }
 }

@@ -1,4 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -36,8 +37,17 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
   final List<String> _uploadedProjects = ['Projects.jpg'];
   final List<String> _uploadedCerts = ['Certificate.jpg'];
   String? _selectedSpecialty;
+  final List<String> _specialties = const [
+    'Carpenters',
+    'Painters',
+    'Tiler',
+    'Kitchen\'s specialist',
+    'Piscinist ( pool maintenance )',
+    'Exterior architect',
+  ];
   bool _dataLoaded = false;
   bool _saving = false;
+  String? _kbisFile;
 
   @override
   void dispose() {
@@ -83,6 +93,13 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
         _socialFacebookController.text = p.socialFacebook ?? '';
         _socialTwitterController.text = p.socialTwitter ?? '';
         _socialLinkedinController.text = p.socialLinkedin ?? '';
+        _uploadedProjects
+          ..clear()
+          ..addAll(p.projectUploads);
+        _uploadedCerts
+          ..clear()
+          ..addAll(p.certificateUploads);
+        _kbisFile = p.kbisExtractUrl;
       }
     }
   }
@@ -115,18 +132,53 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
       socialFacebook: _socialFacebookController.text.trim().isEmpty ? null : _socialFacebookController.text.trim(),
       socialTwitter: _socialTwitterController.text.trim().isEmpty ? null : _socialTwitterController.text.trim(),
       socialLinkedin: _socialLinkedinController.text.trim().isEmpty ? null : _socialLinkedinController.text.trim(),
+      kbisExtractUrl: _kbisFile,
+      projectUploads: _uploadedProjects,
+      certificateUploads: _uploadedCerts,
     );
     final result = await ref.read(authRepositoryProvider).updateProviderProfile(profile);
     if (!mounted) return;
     setState(() => _saving = false);
     if (result.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.errorMessage!.tr()), backgroundColor: AppColors.primaryRed),
-      );
+      final msg = result.errorMessage!;
+      _showSystematicError(msg.startsWith('auth.') ? msg.tr() : msg);
       return;
     }
     await ref.read(authStateNotifierProvider).refresh();
     if (mounted) context.pop();
+  }
+
+  void _showSystematicError(String message) {
+    final lines = message
+        .split('\n')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (lines.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: AppColors.primaryRed),
+      );
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Please fix the following'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: lines.map((l) => Text('- $l')).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -164,19 +216,28 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
             const SizedBox(height: 24),
             _sectionTitle('Choose your specialty'),
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.borderLight),
-                borderRadius: BorderRadius.circular(12),
+            DropdownButtonFormField<String>(
+              value: _selectedSpecialty,
+              hint: Text('Select...', style: GoogleFonts.outfit(fontSize: 14, color: Colors.black38)),
+              items: _specialties
+                  .map((s) => DropdownMenuItem<String>(
+                        value: s,
+                        child: Text(s, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMain)),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedSpecialty = v),
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.borderLight),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.borderLight),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(_selectedSpecialty ?? 'Select...', style: GoogleFonts.outfit(fontSize: 14, color: _selectedSpecialty != null ? AppColors.textMain : Colors.black38)),
-                  const Icon(LucideIcons.chevronDown, size: 20, color: AppColors.textSecondary),
-                ],
-              ),
+              icon: const Icon(LucideIcons.chevronDown, size: 20, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 24),
             _sectionTitle('Company Info.'),
@@ -192,9 +253,30 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
             _labeledInput(label: 'SIRET number *', controller: _siretController),
             const SizedBox(height: 12),
             Text('Upload KBIS (Optional)', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textMain)),
+            if (_kbisFile != null && _kbisFile!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(_kbisFile!, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMain)),
+                    ),
+                    IconButton(
+                      icon: const Icon(LucideIcons.trash2, color: AppColors.primaryRed, size: 20),
+                      onPressed: () => setState(() => _kbisFile = null),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: () {},
+              onPressed: () async {
+                final result = await FilePicker.platform.pickFiles(allowMultiple: false);
+                if (result == null || result.files.isEmpty) return;
+                final fileName = result.files.first.name;
+                if (fileName.isEmpty) return;
+                setState(() => _kbisFile = fileName);
+              },
               icon: const Icon(LucideIcons.upload, size: 18, color: AppColors.primaryRed),
               label: Text('Upload', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primaryRed)),
               style: OutlinedButton.styleFrom(
@@ -220,7 +302,20 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
                   ),
                 )),
             const SizedBox(height: 8),
-            _uploadButton(onPressed: () {}),
+            _uploadButton(
+              onPressed: () async {
+                final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+                if (result == null || result.files.isEmpty) return;
+                final names = result.files.map((e) => e.name).where((e) => e.isNotEmpty).toList();
+                if (names.isEmpty) return;
+                setState(() {
+                  _uploadedProjects.addAll(names);
+                  if (_uploadedProjects.length > 20) {
+                    _uploadedProjects.removeRange(20, _uploadedProjects.length);
+                  }
+                });
+              },
+            ),
             const SizedBox(height: 4),
             Text('Add at least 3 file & maximum 20 file', style: GoogleFonts.outfit(fontSize: 11, color: AppColors.primaryRed)),
             const SizedBox(height: 16),
@@ -236,7 +331,15 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
                   ),
                 )),
             const SizedBox(height: 8),
-            _uploadButton(onPressed: () {}),
+            _uploadButton(
+              onPressed: () async {
+                final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+                if (result == null || result.files.isEmpty) return;
+                final names = result.files.map((e) => e.name).where((e) => e.isNotEmpty).toList();
+                if (names.isEmpty) return;
+                setState(() => _uploadedCerts.addAll(names));
+              },
+            ),
             const SizedBox(height: 4),
             Text('Add at least 2 file', style: GoogleFonts.outfit(fontSize: 11, color: AppColors.primaryRed)),
             const SizedBox(height: 24),

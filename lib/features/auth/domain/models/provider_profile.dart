@@ -17,6 +17,9 @@ class ProviderProfile {
     this.socialFacebook,
     this.socialTwitter,
     this.socialLinkedin,
+    this.kbisExtractUrl,
+    this.projectUploads = const [],
+    this.certificateUploads = const [],
   });
 
   final String displayName;
@@ -35,6 +38,9 @@ class ProviderProfile {
   final String? socialFacebook;
   final String? socialTwitter;
   final String? socialLinkedin;
+  final String? kbisExtractUrl;
+  final List<String> projectUploads;
+  final List<String> certificateUploads;
 
   Map<String, dynamic> toMap() {
     return {
@@ -54,6 +60,36 @@ class ProviderProfile {
       if (socialFacebook != null && socialFacebook!.isNotEmpty) 'socialFacebook': socialFacebook,
       if (socialTwitter != null && socialTwitter!.isNotEmpty) 'socialTwitter': socialTwitter,
       if (socialLinkedin != null && socialLinkedin!.isNotEmpty) 'socialLinkedin': socialLinkedin,
+      if (kbisExtractUrl != null && kbisExtractUrl!.isNotEmpty) 'kbisExtractUrl': kbisExtractUrl,
+      'projectUploads': projectUploads,
+      'certificateUploads': certificateUploads,
+    };
+  }
+
+  Map<String, dynamic> toCompleteProfileApiMap() {
+    final socialMediaLinks = <String>[
+      if (socialInstagram != null && socialInstagram!.isNotEmpty) socialInstagram!,
+      if (socialFacebook != null && socialFacebook!.isNotEmpty) socialFacebook!,
+      if (socialTwitter != null && socialTwitter!.isNotEmpty) socialTwitter!,
+      if (socialLinkedin != null && socialLinkedin!.isNotEmpty) socialLinkedin!,
+    ];
+    return {
+      'username': displayName,
+      'phone': phone,
+      'address': address,
+      'description': description ?? '',
+      'speciality': specialty ?? '',
+      'companyName': companyName ?? '',
+      'contactEmail': contactMail ?? '',
+      'companyAddress': companyAddress ?? '',
+      'postalCode': postalCode ?? '',
+      'siretNumber': siret ?? '',
+      'kbisExtractUrl': kbisExtractUrl,
+      'projectUploads': projectUploads,
+      'certificateUploads': certificateUploads,
+      'serviceAreaCities': serviceAreas,
+      'websiteUrl': website,
+      'socialMediaLinks': socialMediaLinks,
     };
   }
 
@@ -61,26 +97,48 @@ class ProviderProfile {
     if (map == null) {
       return const ProviderProfile(displayName: '', phone: '', address: '');
     }
-    final areas = map['serviceAreas'];
+    final areas = map['serviceAreas'] ?? map['serviceAreaCities'];
+    final socialList = map['socialMediaLinks'];
+    String? sInstagram;
+    String? sFacebook;
+    String? sTwitter;
+    String? sLinkedin;
+    if (socialList is List) {
+      for (final item in socialList) {
+        final url = item.toString();
+        final low = url.toLowerCase();
+        if (low.contains('instagram')) sInstagram = url;
+        if (low.contains('facebook')) sFacebook = url;
+        if (low.contains('twitter') || low.contains('x.com')) sTwitter = url;
+        if (low.contains('linkedin')) sLinkedin = url;
+      }
+    }
     return ProviderProfile(
-      displayName: map['displayName'] as String? ?? '',
+      displayName: map['displayName'] as String? ?? map['username'] as String? ?? '',
       phone: map['phone'] as String? ?? '',
       address: map['address'] as String? ?? '',
       description: map['description'] as String?,
-      specialty: map['specialty'] as String?,
+      specialty: map['specialty'] as String? ?? map['speciality'] as String?,
       companyName: map['companyName'] as String?,
-      contactMail: map['contactMail'] as String?,
+      contactMail: map['contactMail'] as String? ?? map['contactEmail'] as String?,
       companyAddress: map['companyAddress'] as String?,
       postalCode: map['postalCode'] as String?,
-      siret: map['siret'] as String?,
+      siret: map['siret'] as String? ?? map['siretNumber'] as String?,
       serviceAreas: areas is List<dynamic>
           ? areas.map((e) => e.toString()).toList()
           : const [],
-      website: map['website'] as String?,
-      socialInstagram: map['socialInstagram'] as String?,
-      socialFacebook: map['socialFacebook'] as String?,
-      socialTwitter: map['socialTwitter'] as String?,
-      socialLinkedin: map['socialLinkedin'] as String?,
+      website: map['website'] as String? ?? map['websiteUrl'] as String?,
+      socialInstagram: map['socialInstagram'] as String? ?? sInstagram,
+      socialFacebook: map['socialFacebook'] as String? ?? sFacebook,
+      socialTwitter: map['socialTwitter'] as String? ?? sTwitter,
+      socialLinkedin: map['socialLinkedin'] as String? ?? sLinkedin,
+      kbisExtractUrl: map['kbisExtractUrl'] as String?,
+      projectUploads: map['projectUploads'] is List
+          ? (map['projectUploads'] as List).map((e) => e.toString()).toList()
+          : const [],
+      certificateUploads: map['certificateUploads'] is List
+          ? (map['certificateUploads'] as List).map((e) => e.toString()).toList()
+          : const [],
     );
   }
 
@@ -101,6 +159,9 @@ class ProviderProfile {
     String? socialFacebook,
     String? socialTwitter,
     String? socialLinkedin,
+    String? kbisExtractUrl,
+    List<String>? projectUploads,
+    List<String>? certificateUploads,
   }) {
     return ProviderProfile(
       displayName: displayName ?? this.displayName,
@@ -119,6 +180,9 @@ class ProviderProfile {
       socialFacebook: socialFacebook ?? this.socialFacebook,
       socialTwitter: socialTwitter ?? this.socialTwitter,
       socialLinkedin: socialLinkedin ?? this.socialLinkedin,
+      kbisExtractUrl: kbisExtractUrl ?? this.kbisExtractUrl,
+      projectUploads: projectUploads ?? this.projectUploads,
+      certificateUploads: certificateUploads ?? this.certificateUploads,
     );
   }
 }

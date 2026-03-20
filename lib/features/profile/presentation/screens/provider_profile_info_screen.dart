@@ -16,8 +16,6 @@ class ProviderProfileInfoScreen extends ConsumerStatefulWidget {
 }
 
 class _ProviderProfileInfoScreenState extends ConsumerState<ProviderProfileInfoScreen> {
-  int _selectedTab = 0; // 0: Personal Info, 1: Profile Info
-
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authStateNotifierProvider).currentUser;
@@ -29,8 +27,7 @@ class _ProviderProfileInfoScreenState extends ConsumerState<ProviderProfileInfoS
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _buildTabs(),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             _buildProfilePicture(),
             const SizedBox(height: 24),
             _buildDetailsCard(displayName: displayName, email: email),
@@ -39,50 +36,6 @@ class _ProviderProfileInfoScreenState extends ConsumerState<ProviderProfileInfoS
             const SizedBox(height: 40),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildTabs() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _selectedTab = 0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: _selectedTab == 0 ? AppColors.primaryRed : Colors.transparent,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'provider.profile.personal_info'.tr(),
-                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: _selectedTab == 0 ? Colors.white : AppColors.primaryRed),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _selectedTab = 1),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: _selectedTab == 1 ? AppColors.primaryRed : Colors.transparent,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  'provider.profile.profile_info'.tr(),
-                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: _selectedTab == 1 ? Colors.white : AppColors.primaryRed),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

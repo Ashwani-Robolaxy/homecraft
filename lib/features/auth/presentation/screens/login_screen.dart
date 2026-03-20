@@ -7,6 +7,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
+import '../../domain/models/app_user.dart';
 import '../providers/auth_provider.dart';
 import '../utils/auth_validators.dart';
 import '../widgets/custom_text_field.dart';
@@ -36,10 +37,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
+    final roleParam = GoRouterState.of(context).uri.queryParameters['role'];
+    final role = roleParam == 'provider'
+        ? UserRole.provider
+        : roleParam == 'client'
+            ? UserRole.client
+            : null;
     final repo = ref.read(authRepositoryProvider);
     final result = await repo.signInWithEmailAndPassword(
       email: _emailController.text.trim(),
       password: _passwordController.text,
+      role: role,
     );
     if (!mounted) return;
     setState(() => _isLoading = false);
@@ -137,7 +145,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ],
                             ),
                             GestureDetector(
-                              onTap: () => context.push('/forgot-password'),
+                              onTap: () {
+                                final role = GoRouterState.of(context).uri.queryParameters['role'];
+                                context.push(role != null ? '/forgot-password?role=$role' : '/forgot-password');
+                              },
                               child: Text(tr('auth.login.forget_password'), style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w600, fontSize: 12)),
                             ),
                           ],

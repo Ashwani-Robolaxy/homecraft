@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
@@ -37,6 +38,9 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
   bool _saving = false;
   String? _selectedSpecialty;
   List<String> _serviceAreas = [];
+  List<String> _kbisFiles = [];
+  List<String> _projectFiles = [];
+  List<String> _certificateFiles = [];
 
   final List<Map<String, dynamic>> _specialties = [
     {'name': 'Carpenters', 'icon': LucideIcons.hammer},
@@ -91,6 +95,9 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
         _socialFacebookController.text = p.socialFacebook ?? '';
         _socialTwitterController.text = p.socialTwitter ?? '';
         _socialLinkedinController.text = p.socialLinkedin ?? '';
+        _kbisFiles = List.from(p.kbisExtractUrl == null || p.kbisExtractUrl!.isEmpty ? const [] : [p.kbisExtractUrl!]);
+        _projectFiles = List.from(p.projectUploads);
+        _certificateFiles = List.from(p.certificateUploads);
       }
     }
   }
@@ -98,12 +105,7 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
   Future<void> _submitProfile() async {
     final displayName = _userNameController.text.trim();
     if (displayName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your name'),
-          backgroundColor: AppColors.primaryRed,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter your name'), backgroundColor: AppColors.primaryRed));
       return;
     }
     setState(() => _saving = true);
@@ -124,22 +126,46 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
       socialFacebook: _socialFacebookController.text.trim().isEmpty ? null : _socialFacebookController.text.trim(),
       socialTwitter: _socialTwitterController.text.trim().isEmpty ? null : _socialTwitterController.text.trim(),
       socialLinkedin: _socialLinkedinController.text.trim().isEmpty ? null : _socialLinkedinController.text.trim(),
+      kbisExtractUrl: _kbisFiles.isEmpty ? null : _kbisFiles.first,
+      projectUploads: _projectFiles,
+      certificateUploads: _certificateFiles,
     );
     final result = await ref.read(authRepositoryProvider).updateProviderProfile(profile);
     if (!mounted) return;
     setState(() => _saving = false);
     if (result.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.errorMessage!),
-          backgroundColor: AppColors.primaryRed,
-        ),
-      );
+      _showSystematicError(result.errorMessage!);
       return;
     }
     await ref.read(authStateNotifierProvider).refresh();
     if (!mounted) return;
     context.go('/provider-home');
+  }
+
+  void _showSystematicError(String message) {
+    final lines = message.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (lines.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: AppColors.primaryRed));
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Please fix the following'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: lines.map((l) => Text('- $l')).toList()),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
+      ),
+    );
+  }
+
+  Future<void> _pickFiles({required bool allowMultiple, required ValueChanged<List<String>> onPicked}) async {
+    final result = await FilePicker.platform.pickFiles(allowMultiple: allowMultiple);
+    if (result == null) return;
+    final names = result.files.map((f) => f.name).where((n) => n.isNotEmpty).toList();
+    if (names.isEmpty) return;
+    onPicked(names);
   }
 
   @override
@@ -185,17 +211,26 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
               _buildLabel('SIRET number *'),
               _buildTextField(controller: _siretController, hint: 'SIRET number'),
               const SizedBox(height: 24),
-              _buildUploadButton('Upload KBIS (Optional)'),
+              ..._kbisFiles.map((f) => _buildFileItem(f, onDelete: () => setState(() => _kbisFiles.remove(f)))),
+              _buildUploadButton('Upload KBIS (Optional)', onTap: () => _pickFiles(allowMultiple: false, onPicked: (files) => setState(() => _kbisFiles = files.take(1).toList()))),
 
               const SizedBox(height: 32),
               _buildSectionTitle('Projects and Certification'),
               _buildLabel('Upload Projects'),
-              _buildFileItem('Projects.jpg'),
-              _buildUploadButton('Upload', hint: 'Add at least 3 file maximum 20 file'),
+              ..._projectFiles.map((f) => _buildFileItem(f, onDelete: () => setState(() => _projectFiles.remove(f)))),
+              _buildUploadButton(
+                'Upload',
+                hint: 'Add at least 3 file maximum 20 file',
+                onTap: () => _pickFiles(allowMultiple: true, onPicked: (files) => setState(() => _projectFiles = [..._projectFiles, ...files].take(20).toList())),
+              ),
               const SizedBox(height: 24),
               _buildLabel('Upload Certificate'),
-              _buildFileItem('Certificate.jpg'),
-              _buildUploadButton('Upload', hint: 'Add at least 2 file'),
+              ..._certificateFiles.map((f) => _buildFileItem(f, onDelete: () => setState(() => _certificateFiles.remove(f)))),
+              _buildUploadButton(
+                'Upload',
+                hint: 'Add at least 2 file',
+                onTap: () => _pickFiles(allowMultiple: true, onPicked: (files) => setState(() => _certificateFiles = [..._certificateFiles, ...files])),
+              ),
 
               const SizedBox(height: 32),
               _buildSectionTitle('Services Area and Social'),
@@ -336,24 +371,27 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
     );
   }
 
-  Widget _buildUploadButton(String label, {String? hint}) {
+  Widget _buildUploadButton(String label, {String? hint, VoidCallback? onTap}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(color: const Color(0xFFF2E7E7), borderRadius: BorderRadius.circular(12)),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(LucideIcons.upload, color: AppColors.primaryRed, size: 20),
-              const SizedBox(width: 12),
-              Text(
-                label,
-                style: GoogleFonts.outfit(color: AppColors.primaryRed, fontWeight: FontWeight.w600, fontSize: 14),
-              ),
-            ],
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(color: const Color(0xFFF2E7E7), borderRadius: BorderRadius.circular(12)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(LucideIcons.upload, color: AppColors.primaryRed, size: 20),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: GoogleFonts.outfit(color: AppColors.primaryRed, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+              ],
+            ),
           ),
         ),
         if (hint != null)
@@ -365,14 +403,17 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
     );
   }
 
-  Widget _buildFileItem(String fileName) {
+  Widget _buildFileItem(String fileName, {VoidCallback? onDelete}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(fileName, style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF4A698C))),
-          const Icon(LucideIcons.trash2, color: AppColors.primaryRed, size: 18),
+          GestureDetector(
+            onTap: onDelete,
+            child: const Icon(LucideIcons.trash2, color: AppColors.primaryRed, size: 18),
+          ),
         ],
       ),
     );
