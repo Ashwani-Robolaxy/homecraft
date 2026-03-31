@@ -4,7 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_exception.dart';
+import '../../../../core/services/app_toast.dart';
+import '../../../../core/storage/session_storage.dart';
 import '../../../../core/widgets/common_app_bar.dart';
+import '../../../booking/data/booking_remote_datasource.dart';
+import '../../../booking/domain/models/booking.dart';
 
 enum DayStatus { available, unavailable, hourAvailable, booked }
 
@@ -16,17 +22,174 @@ class CalendarManagementScreen extends StatefulWidget {
 }
 
 class _CalendarManagementScreenState extends State<CalendarManagementScreen> {
-  DateTime _focusedMonth = DateTime(2025, 4);
-  int _selectedTab = 0; // 0: Booked, 1: Accepted, 2: History
+  final ApiClient _api = ApiClient();
+  final SessionStorage _session = SessionStorage();
+  final BookingRemoteDatasource _bookingDs = BookingRemoteDatasource();
+  DateTime _focusedMonth = DateTime.now();
+  int _selectedTab = 0; // 0: Pending, 1: Accepted, 2: History
+  bool _loading = true;
+  String? _error;
+  final Map<DateTime, DayStatus> _dayStatusByDate = {};
+  final List<_AppointmentItem> _bookedItems = [];
+  final List<_AppointmentItem> _acceptedItems = [];
+  final List<_AppointmentItem> _historyItems = [];
 
-  // Demo: assign status per day for April 2025
-  static DayStatus _statusForDay(DateTime day) {
-    if (day.month != 4 || day.year != 2025) return DayStatus.unavailable;
-    final d = day.day;
-    if ([3, 7, 12].contains(d)) return DayStatus.booked;
-    if ([4, 10, 11, 15, 16, 21, 22, 26, 27].contains(d)) return DayStatus.unavailable;
-    if ([2, 9, 17, 18, 23, 29, 30].contains(d)) return DayStatus.hourAvailable;
-    return DayStatus.available;
+  // Real booking lists from API
+  List<Booking> _pendingBookings = [];
+  List<Booking> _acceptedBookings = [];
+  List<Booking> _historyBookings = [];
+  bool _bookingBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAvailability();
+  }
+
+  Future<void> _loadAvailability() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final token = await _session.getToken();
+      if (token == null || token.isEmpty) {
+        throw ApiException('Please login again to load availability.');
+      }
+      final monthParam =
+          '${_focusedMonth.year}-${_focusedMonth.month.toString().padLeft(2, '0')}';
+      final map = await _api.get(
+        '/professionals/availability?month=$monthParam',
+        token: token,
+      );
+      _parseAvailabilityPayload(map);
+      if (!mounted) return;
+      setState(() => _loading = false);
+      // Also load bookings in parallel (non-blocking)
+      _loadBookings();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _loadBookings() async {
+    try {
+      final all = await _bookingDs.fetchProfessionalBookings();
+      if (!mounted) return;
+      setState(() {
+        _pendingBookings = all.where((b) => b.status == BookingStatus.pending).toList();
+        _acceptedBookings = all.where((b) => b.status == BookingStatus.accepted).toList();
+        _historyBookings = all.where((b) => b.status.isHistory).toList();
+      });
+    } catch (_) {
+      // Silently fail – calendar still usable
+    }
+  }
+
+  Future<void> _acceptBooking(Booking b) async {
+    setState(() => _bookingBusy = true);
+    try {
+      await _bookingDs.acceptBooking(b.id);
+      AppToast.success('Booking accepted.');
+      await _loadBookings();
+    } catch (e) {
+      AppToast.error(e.toString());
+    } finally {
+      if (mounted) setState(() => _bookingBusy = false);
+    }
+  }
+
+  Future<void> _rejectBooking(Booking b) async {
+    setState(() => _bookingBusy = true);
+    try {
+      await _bookingDs.rejectBooking(b.id);
+      AppToast.success('Booking rejected.');
+      await _loadBookings();
+    } catch (e) {
+      AppToast.error(e.toString());
+    } finally {
+      if (mounted) setState(() => _bookingBusy = false);
+    }
+  }
+
+  void _parseAvailabilityPayload(Map<String, dynamic> map) {
+    _dayStatusByDate.clear();
+    _bookedItems.clear();
+    _acceptedItems.clear();
+    _historyItems.clear();
+
+    final data = map['data'];
+    final root = data is Map<String, dynamic> ? data : map;
+
+    final dayList = _extractList(root, const ['availability', 'days', 'items', 'calendar']);
+    for (final entry in dayList.whereType<Map>()) {
+      final e = Map<String, dynamic>.from(entry);
+      final rawDate = (e['date'] ?? e['day'] ?? e['availableDate'] ?? '').toString().trim();
+      final dt = DateTime.tryParse(rawDate);
+      if (dt == null) continue;
+      _dayStatusByDate[_dateOnly(dt)] = _statusFromRaw((e['status'] ?? e['type'] ?? '').toString());
+    }
+
+    _applyDateListStatus(root['bookedDates'], DayStatus.booked);
+    _applyDateListStatus(root['unavailableDates'], DayStatus.unavailable);
+    _applyDateListStatus(root['hourAvailableDates'], DayStatus.hourAvailable);
+    _applyDateListStatus(root['availableDates'], DayStatus.available);
+
+    _bookedItems.addAll(_extractAppointments(root, keys: const ['booked', 'bookings']));
+    _acceptedItems.addAll(_extractAppointments(root, keys: const ['accepted', 'acceptedBookings']));
+    _historyItems.addAll(_extractAppointments(root, keys: const ['history', 'pastBookings']));
+  }
+
+  List<dynamic> _extractList(Map<String, dynamic> root, List<String> keys) {
+    for (final key in keys) {
+      final v = root[key];
+      if (v is List) return v;
+    }
+    return const [];
+  }
+
+  void _applyDateListStatus(dynamic raw, DayStatus status) {
+    if (raw is! List) return;
+    for (final d in raw) {
+      final dt = DateTime.tryParse(d.toString());
+      if (dt != null) _dayStatusByDate[_dateOnly(dt)] = status;
+    }
+  }
+
+  List<_AppointmentItem> _extractAppointments(Map<String, dynamic> root, {required List<String> keys}) {
+    for (final key in keys) {
+      final v = root[key];
+      if (v is List) {
+        return v.whereType<Map>().map((raw) {
+          final e = Map<String, dynamic>.from(raw);
+          final start = (e['startTime'] ?? e['dateTime'] ?? e['time'] ?? e['scheduledAt'] ?? '').toString();
+          final end = (e['endTime'] ?? '').toString();
+          final when = end.isEmpty || start.isEmpty ? start : '$start - $end';
+          final addr = (e['address'] ?? e['location'] ?? e['city'] ?? '—').toString();
+          final name = (e['clientName'] ?? e['name'] ?? e['userName'] ?? 'Client').toString();
+          return _AppointmentItem(name: name, dateTime: when.isEmpty ? '—' : when, address: addr);
+        }).toList();
+      }
+    }
+    return const [];
+  }
+
+  DayStatus _statusForDay(DateTime day) {
+    return _dayStatusByDate[_dateOnly(day)] ?? DayStatus.unavailable;
+  }
+
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  DayStatus _statusFromRaw(String raw) {
+    final v = raw.toLowerCase();
+    if (v.contains('book')) return DayStatus.booked;
+    if (v.contains('hour')) return DayStatus.hourAvailable;
+    if (v.contains('avail') && !v.contains('un')) return DayStatus.available;
+    return DayStatus.unavailable;
   }
 
   static Color _colorForStatus(DayStatus s) {
@@ -51,28 +214,53 @@ class _CalendarManagementScreenState extends State<CalendarManagementScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_loading)
+              const _CalendarShimmer()
+            else if (_error != null)
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Text(_error!, textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary)),
+                    const SizedBox(height: 8),
+                    TextButton(onPressed: _loadAvailability, child: const Text('Retry')),
+                  ],
+                ),
+              )
+            else ...[
             _buildLegend(),
             _buildCalendar(),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SizedBox(
-                width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+              child: Align(
+                alignment: Alignment.centerRight,
                 child: ElevatedButton(
-                  onPressed: () => context.push('/edit-calendar'),
+                  onPressed: () async {
+                    final refreshed =
+                        await context.push<bool>('/edit-calendar');
+                    if (refreshed == true && mounted) _loadAvailability();
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryRed,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(40)),
+                    elevation: 2,
                   ),
-                  child: Text('provider.profile.edit_your_availability'.tr(), style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600)),
+                  child: Text(
+                    'provider.profile.edit_your_availability'.tr(),
+                    style: GoogleFonts.outfit(
+                        fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 20),
             _buildTabs(),
             _buildAppointmentList(),
+            ],
           ],
         ),
       ),
@@ -125,7 +313,10 @@ class _CalendarManagementScreenState extends State<CalendarManagementScreen> {
             children: [
               IconButton(
                 icon: const Icon(LucideIcons.chevronLeft, color: AppColors.textSecondary),
-                onPressed: () => setState(() => _focusedMonth = DateTime(year, month - 1)),
+                onPressed: () {
+                  setState(() => _focusedMonth = DateTime(year, month - 1));
+                  _loadAvailability();
+                },
               ),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -137,7 +328,10 @@ class _CalendarManagementScreenState extends State<CalendarManagementScreen> {
               ),
               IconButton(
                 icon: const Icon(LucideIcons.chevronRight, color: AppColors.textSecondary),
-                onPressed: () => setState(() => _focusedMonth = DateTime(year, month + 1)),
+                onPressed: () {
+                  setState(() => _focusedMonth = DateTime(year, month + 1));
+                  _loadAvailability();
+                },
               ),
             ],
           ),
@@ -151,9 +345,9 @@ class _CalendarManagementScreenState extends State<CalendarManagementScreen> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: 7,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 4,
-            childAspectRatio: 1.1,
+            mainAxisSpacing: 6,
+            crossAxisSpacing: 6,
+            childAspectRatio: 1.0,
             children: List.generate(rows * 7, (i) {
               final cellIndex = i;
               if (cellIndex < leadingPadding) {
@@ -167,13 +361,24 @@ class _CalendarManagementScreenState extends State<CalendarManagementScreen> {
               final day = DateTime(year, month, dayNum);
               final status = _statusForDay(day);
               final color = _colorForStatus(status);
-              return Center(
+              return Padding(
+                padding: const EdgeInsets.all(3),
                 child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   alignment: Alignment.center,
-                  child: Text('$dayNum', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w500, color: status == DayStatus.hourAvailable ? Colors.black87 : Colors.white)),
+                  child: Text(
+                    '$dayNum',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: status == DayStatus.hourAvailable
+                          ? Colors.black87
+                          : Colors.white,
+                    ),
+                  ),
                 ),
               );
             }),
@@ -221,102 +426,141 @@ class _CalendarManagementScreenState extends State<CalendarManagementScreen> {
   }
 
   Widget _buildAppointmentList() {
-    final isBooked = _selectedTab == 0;
+    final bookings = _selectedTab == 0
+        ? _pendingBookings
+        : _selectedTab == 1
+            ? _acceptedBookings
+            : _historyBookings;
+
+    if (_bookingBusy) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(child: CircularProgressIndicator(color: AppColors.primaryRed)),
+      );
+    }
+
+    if (bookings.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+        child: Center(
+          child: Text(
+            'No appointments in this section.',
+            style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
+
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-      itemCount: 2,
+      itemCount: bookings.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, index) => _AppointmentCard(
-        name: 'Nessa',
-        dateTime: '14 March || 10:00 AM - 11:00 PM',
-        address: 'Paris, France',
-        isBooked: isBooked,
-        isHistory: _selectedTab == 2,
-        onAccept: () => _showAcceptDialog(context),
-        onReject: () => _showRejectDialog(context),
-        onComplete: () {},
-      ),
+      itemBuilder: (context, index) {
+        final b = bookings[index];
+        final isPending = b.status == BookingStatus.pending;
+        final isHistory = b.status.isHistory;
+        return _BookingCard(
+          booking: b,
+          onAccept: isPending ? () => _confirmAndAct('Accept', () => _acceptBooking(b)) : null,
+          onReject: isPending ? () => _confirmAndAct('Reject', () => _rejectBooking(b)) : null,
+          isHistory: isHistory,
+        );
+      },
     );
   }
 
-  void _showAcceptDialog(BuildContext context) {
-    showDialog(
+  Future<void> _confirmAndAct(String label, Future<void> Function() action) async {
+    final color = label == 'Accept' ? const Color(0xFF4CAF50) : AppColors.primaryRed;
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('provider.profile.accept'.tr(), style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: const Color(0xFF4CAF50))),
-        content: Text('provider.profile.accept_confirm'.tr(), style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary)),
-        actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: OutlinedButton.styleFrom(foregroundColor: AppColors.primaryRed, side: const BorderSide(color: AppColors.primaryRed), backgroundColor: Colors.white),
-            child: Text('provider.profile.no'.tr(), style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primaryRed)),
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$label Booking',
+                style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: color),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Are you sure you want to $label this booking?',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(fontSize: 14, color: Colors.black87, height: 1.4),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFD0D0D0)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                        ),
+                        child: Text('Cancel', style: GoogleFonts.outfit(color: Colors.black54, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: color,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                        ),
+                        child: Text(label, style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            child: Text('provider.profile.yes'.tr(), style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
-          ),
-        ],
+        ),
       ),
     );
-  }
-
-  void _showRejectDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('provider.profile.reject'.tr(), style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.primaryRed)),
-        content: Text('provider.profile.reject_confirm'.tr(), style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary)),
-        actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: OutlinedButton.styleFrom(foregroundColor: AppColors.primaryRed, side: const BorderSide(color: AppColors.primaryRed), backgroundColor: Colors.white),
-            child: Text('provider.profile.no'.tr(), style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primaryRed)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryRed, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            child: Text('provider.profile.yes'.tr(), style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
+    if (confirmed == true) await action();
   }
 }
 
-class _AppointmentCard extends StatelessWidget {
-  final String name;
-  final String dateTime;
-  final String address;
-  final bool isBooked;
-  final bool isHistory;
-  final VoidCallback onAccept;
-  final VoidCallback onReject;
-  final VoidCallback onComplete;
+// ─────────────────────────────────────────────────────────────────────────────
+// Booking card for professional's calendar view
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _AppointmentCard({
-    required this.name,
-    required this.dateTime,
-    required this.address,
-    required this.isBooked,
+class _BookingCard extends StatelessWidget {
+  const _BookingCard({
+    required this.booking,
+    this.onAccept,
+    this.onReject,
     this.isHistory = false,
-    required this.onAccept,
-    required this.onReject,
-    required this.onComplete,
   });
+
+  final Booking booking;
+  final VoidCallback? onAccept;
+  final VoidCallback? onReject;
+  final bool isHistory;
 
   @override
   Widget build(BuildContext context) {
+    final b = booking;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 2))
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,64 +569,306 @@ class _AppointmentCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMain)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(LucideIcons.clock, size: 14, color: AppColors.textSecondary),
-                    const SizedBox(width: 6),
-                    Text(dateTime, style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textSecondary)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(LucideIcons.mapPin, size: 14, color: AppColors.textSecondary),
-                    const SizedBox(width: 6),
-                    Text('Address: $address', style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textSecondary)),
-                  ],
+                Text(b.clientName ?? 'Client',
+                    style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textMain)),
+                const SizedBox(height: 6),
+                if (b.scheduledDate != null) ...[
+                  Row(children: [
+                    const Icon(LucideIcons.calendarDays, size: 13, color: AppColors.textSecondary),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${b.scheduledDate!.day}/${b.scheduledDate!.month}/${b.scheduledDate!.year}'
+                      '${b.slotStart != null ? "  ${b.slotStart}" : ""}'
+                      '${b.slotEnd != null ? " – ${b.slotEnd}" : ""}',
+                      style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ]),
+                  const SizedBox(height: 4),
+                ],
+                if (b.location != null && b.location!.isNotEmpty)
+                  Row(children: [
+                    const Icon(LucideIcons.mapPin, size: 13, color: AppColors.textSecondary),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(b.location!,
+                          style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textSecondary)),
+                    ),
+                  ]),
+                const SizedBox(height: 6),
+                // Status badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _statusColor(b.status).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(b.status.label,
+                      style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _statusColor(b.status))),
                 ),
               ],
             ),
           ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(LucideIcons.fileText, size: 20, color: AppColors.textSecondary),
-              if (!isHistory) ...[
-                const SizedBox(height: 8),
-                if (isBooked) ...[
-                SizedBox(
-                  width: 70,
-                  child: ElevatedButton(
-                    onPressed: onAccept,
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 6), minimumSize: Size.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
-                    child: Text('provider.profile.accept'.tr(), style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600)),
+          if (!isHistory && (onAccept != null || onReject != null)) ...[
+            const SizedBox(width: 12),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onAccept != null)
+                  SizedBox(
+                    width: 72,
+                    child: ElevatedButton(
+                      onPressed: onAccept,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4CAF50),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        minimumSize: Size.zero,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      child: Text('Accept', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                SizedBox(
-                  width: 70,
-                  child: OutlinedButton(
-                    onPressed: onReject,
-                    style: OutlinedButton.styleFrom(foregroundColor: AppColors.primaryRed, side: const BorderSide(color: AppColors.primaryRed), padding: const EdgeInsets.symmetric(vertical: 6), minimumSize: Size.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
-                    child: Text('provider.profile.reject'.tr(), style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600)),
+                if (onReject != null) ...[
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: 72,
+                    child: OutlinedButton(
+                      onPressed: onReject,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primaryRed,
+                        side: const BorderSide(color: AppColors.primaryRed),
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        minimumSize: Size.zero,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      ),
+                      child: Text('Reject', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
                   ),
-                ),
-              ] else
-                SizedBox(
-                  width: 80,
-                  child: ElevatedButton(
-                    onPressed: onComplete,
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 6), minimumSize: Size.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
-                    child: Text('provider.profile.complete'.tr(), style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600)),
-                  ),
-                ),
+                ],
               ],
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );
   }
+
+  Color _statusColor(BookingStatus s) {
+    switch (s) {
+      case BookingStatus.pending: return Colors.orange;
+      case BookingStatus.accepted: return const Color(0xFF0095FF);
+      case BookingStatus.rejected: return AppColors.primaryRed;
+      case BookingStatus.cancelled: return Colors.grey;
+    }
+  }
+}
+
+class _AppointmentItem {
+  const _AppointmentItem({required this.name, required this.dateTime, required this.address});
+  final String name;
+  final String dateTime;
+  final String address;
+}
+
+
+// ---------------------------------------------------------------------------
+// Pure-Flutter shimmer skeleton for the calendar loading state
+// ---------------------------------------------------------------------------
+
+class _CalendarShimmer extends StatefulWidget {
+  const _CalendarShimmer();
+
+  @override
+  State<_CalendarShimmer> createState() => _CalendarShimmerState();
+}
+
+class _CalendarShimmerState extends State<_CalendarShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+    _anim = Tween<double>(begin: -2, end: 2).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOutSine),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => _ShimmerBody(shimmerOffset: _anim.value),
+    );
+  }
+}
+
+class _ShimmerBody extends StatelessWidget {
+  const _ShimmerBody({required this.shimmerOffset});
+  final double shimmerOffset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Month navigator row skeleton
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _shimmerBox(width: 32, height: 32, radius: 16),
+              _shimmerBox(width: 140, height: 22, radius: 6),
+              _shimmerBox(width: 32, height: 32, radius: 16),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Day-of-week label row
+          Row(
+            children: List.generate(
+              7,
+              (_) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: _shimmerBox(height: 14, radius: 4),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Calendar grid: 7 columns x 5 rows of day cells
+          GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            shrinkWrap: true,
+            itemCount: 35,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+            ),
+            itemBuilder: (_, __) => _shimmerBox(radius: 10),
+          ),
+          const SizedBox(height: 28),
+
+          // Section label
+          _shimmerBox(width: 130, height: 16, radius: 4),
+          const SizedBox(height: 14),
+
+          // Three appointment skeleton cards
+          for (var i = 0; i < 3; i++) ...[
+            _appointmentCard(),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _appointmentCard() {
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          _shimmerBox(width: 44, height: 44, radius: 22),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _shimmerBox(height: 14, radius: 4),
+                const SizedBox(height: 8),
+                _shimmerBox(width: 120, height: 12, radius: 4),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          _shimmerBox(width: 60, height: 28, radius: 6),
+        ],
+      ),
+    );
+  }
+
+  Widget _shimmerBox({double? width, double? height, double radius = 4}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: _ShimmerGradientBox(offset: shimmerOffset),
+      ),
+    );
+  }
+}
+
+class _ShimmerGradientBox extends StatelessWidget {
+  const _ShimmerGradientBox({required this.offset});
+  final double offset;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final w = constraints.maxWidth.isFinite ? constraints.maxWidth : 200.0;
+      final h = constraints.maxHeight.isFinite ? constraints.maxHeight : 40.0;
+      return CustomPaint(
+        size: Size(w, h),
+        painter: _ShimmerPainter(offset: offset),
+      );
+    });
+  }
+}
+
+class _ShimmerPainter extends CustomPainter {
+  const _ShimmerPainter({required this.offset});
+  final double offset;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final gradient = LinearGradient(
+      begin: Alignment(offset - 1, 0),
+      end: Alignment(offset + 1, 0),
+      colors: const [
+        Color(0xFFEDEDED),
+        Color(0xFFF8F8F8),
+        Color(0xFFFFFFFF),
+        Color(0xFFF8F8F8),
+        Color(0xFFEDEDED),
+      ],
+      stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
+    );
+    canvas.drawRect(rect, Paint()..shader = gradient.createShader(rect));
+  }
+
+  @override
+  bool shouldRepaint(_ShimmerPainter old) => old.offset != offset;
 }

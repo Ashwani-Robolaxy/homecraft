@@ -1,19 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/app_toast.dart';
+import '../../../favorites/presentation/providers/favorites_provider.dart';
+import '../../../projects/domain/models/project.dart';
+import '../../../chat/presentation/professional_chat_args.dart';
+import 'chat_screen.dart';
 
-class ProjectDetailsScreen extends StatelessWidget {
-  const ProjectDetailsScreen({super.key});
+class ProjectDetailsScreen extends ConsumerWidget {
+  const ProjectDetailsScreen({super.key, required this.project});
+
+  final Project project;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isFav = ref.watch(
+        favoritesProvider.select((s) => s.isFavorited(project.id)));
+    final isToggling = ref.watch(
+        favoritesProvider.select((s) => s.togglingIds.contains(project.id)));
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(context),
+            _buildHeader(context, ref, isFav, isToggling),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
@@ -22,15 +35,11 @@ class ProjectDetailsScreen extends StatelessWidget {
                   children: [
                     _buildProjectImage(),
                     const SizedBox(height: 24),
-                    _buildTitlePrice(),
+                    _buildTitlePrice(project),
                     const SizedBox(height: 4),
-                    _buildLocationDate(),
+                    _buildLocationDate(project),
                     const SizedBox(height: 16),
-                    _buildDescription(),
-                    const SizedBox(height: 16),
-                    _buildDescription(), // Repeating description as in screenshot
-                    const SizedBox(height: 16),
-                    _buildDescription(), // Repeating for scroll effect
+                    _buildDescription(project),
                   ],
                 ),
               ),
@@ -42,7 +51,8 @@ class ProjectDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(
+      BuildContext context, WidgetRef ref, bool isFav, bool isToggling) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       child: Row(
@@ -68,7 +78,50 @@ class ProjectDetailsScreen extends StatelessWidget {
               color: Colors.black,
             ),
           ),
-          const SizedBox(width: 48), // Spacer for center alignment
+          // Heart / favorite button
+          GestureDetector(
+            onTap: isToggling
+                ? null
+                : () async {
+                    final notifier = ref.read(favoritesProvider.notifier);
+                    final nowFav = await notifier.toggleProject(
+                      project.id,
+                      displayName: project.title,
+                      subtitle: project.serviceType ?? '',
+                      imageUrl: project.imageUrl,
+                    );
+                    if (!context.mounted) return;
+                    final err = notifier.consumeError();
+                    if (err != null) {
+                      AppToast.error('Could not update favorites. Try again.');
+                    } else {
+                      AppToast.info(nowFav
+                          ? 'Added to favorites'
+                          : 'Removed from favorites');
+                    }
+                  },
+            child: Container(
+              width: 40,
+              height: 40,
+              margin: const EdgeInsets.only(right: 4),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+              ),
+              child: isToggling
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AppColors.primaryRed),
+                    )
+                  : Icon(
+                      isFav ? Icons.favorite : Icons.favorite_border,
+                      color: isFav ? AppColors.primaryRed : Colors.black54,
+                      size: 22,
+                    ),
+            ),
+          ),
         ],
       ),
     );
@@ -77,8 +130,8 @@ class ProjectDetailsScreen extends StatelessWidget {
   Widget _buildProjectImage() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
-      child: Image.asset(
-        'assets/images/garden.png',
+      child: Image.network(
+        project.imageUrl ?? '',
         height: 250,
         width: double.infinity,
         fit: BoxFit.cover,
@@ -91,19 +144,19 @@ class ProjectDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTitlePrice() {
+  Widget _buildTitlePrice(Project project) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          'Gardeners, landscaper',
+          project.serviceType?.isNotEmpty == true ? project.serviceType! : project.title,
           style: GoogleFonts.outfit(
             fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
         ),
         Text(
-          '\$ 200',
+          project.budget ?? 'N/A',
           style: GoogleFonts.outfit(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -113,25 +166,25 @@ class ProjectDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildLocationDate() {
+  Widget _buildLocationDate(Project project) {
     return Row(
       children: [
         Text(
-          'New York, US',
+          project.location,
           style: GoogleFonts.outfit(fontSize: 12, color: Colors.black45),
         ),
         const SizedBox(width: 12),
         Text(
-          'Jun14,2025',
+          project.date,
           style: GoogleFonts.outfit(fontSize: 12, color: Colors.black45),
         ),
       ],
     );
   }
 
-  Widget _buildDescription() {
+  Widget _buildDescription(Project project) {
     return Text(
-      "Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
+      project.description,
       style: GoogleFonts.outfit(
         fontSize: 14,
         color: Colors.black87,
@@ -148,14 +201,14 @@ class ProjectDetailsScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: () {},
+              onPressed: () => _openClientChat(context),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: AppColors.primaryRed),
                 padding: const EdgeInsets.symmetric(vertical: 18),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
               ),
               child: Text(
-                'Massages', // Typo in screenshot "Massages" instead of Messages
+                'Messages',
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -186,6 +239,26 @@ class ProjectDetailsScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openClientChat(BuildContext context) {
+    final uid = project.clientUserId?.trim();
+    if (uid == null || uid.isEmpty) {
+      AppToast.info('Client information is not available for this project yet.');
+      return;
+    }
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) => ChatScreen(
+          args: ProfessionalChatArgs(
+            clientUserId: uid,
+            clientDisplayName: project.clientDisplayName,
+            projectId: project.id,
+          ),
+        ),
       ),
     );
   }

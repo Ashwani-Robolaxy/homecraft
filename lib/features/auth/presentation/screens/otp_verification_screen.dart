@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:pinput/pinput.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_assets.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
 import '../../domain/models/app_user.dart';
 import '../providers/auth_provider.dart';
@@ -34,9 +35,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
     final email = params['email'] ?? '';
     final role = (params['role'] == 'provider') ? UserRole.provider : UserRole.client;
     if (email.isEmpty || _otp.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid 6-digit OTP'), backgroundColor: AppColors.primaryRed),
-      );
+      AppToast.error('Please enter a valid 6-digit OTP');
       return;
     }
     setState(() => _isLoading = true);
@@ -48,9 +47,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: AppColors.primaryRed),
-      );
+      AppToast.error(error);
       return;
     }
     final roleValue = role == UserRole.provider ? 'provider' : 'client';

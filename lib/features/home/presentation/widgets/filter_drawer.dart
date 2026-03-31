@@ -1,20 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../professionals/presentation/providers/recommended_professionals_provider.dart';
 
-class FilterDrawer extends StatefulWidget {
+class FilterDrawer extends ConsumerStatefulWidget {
   const FilterDrawer({super.key});
 
   @override
-  State<FilterDrawer> createState() => _FilterDrawerState();
+  ConsumerState<FilterDrawer> createState() => _FilterDrawerState();
 }
 
-class _FilterDrawerState extends State<FilterDrawer> {
+class _FilterDrawerState extends ConsumerState<FilterDrawer> {
   double _distance = 4.0;
   final List<bool> _availability = [false, false, false];
   int _selectedRating = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    final filters = ref.read(professionalSearchFiltersProvider);
+    _distance = filters.maxDistanceKm;
+    _availability[0] = filters.availability.contains('today');
+    _availability[1] = filters.availability.contains('this_week') || filters.availability.contains('within_week');
+    _availability[2] = filters.availability.contains('this_month') || filters.availability.contains('next_week');
+    _selectedRating = switch (filters.minRating) {
+      3 => 0,
+      4 => 1,
+      5 => 2,
+      _ => -1,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +138,30 @@ class _FilterDrawerState extends State<FilterDrawer> {
                     backgroundColor: const Color(0xFF2D8000),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                   ),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    final availability = <String>{
+                      if (_availability[0]) 'today',
+                      if (_availability[1]) 'this_week',
+                      if (_availability[2]) 'this_month',
+                    };
+                    final minRating = switch (_selectedRating) {
+                      0 => 3,
+                      1 => 4,
+                      2 => 5,
+                      _ => null,
+                    };
+                    final current = ref.read(professionalSearchFiltersProvider);
+                    ref.read(professionalSearchFiltersProvider.notifier).set(
+                          current.copyWith(
+                            maxDistanceKm: _distance,
+                            availability: availability,
+                            minRating: minRating,
+                            clearMinRating: minRating == null,
+                          ),
+                        );
+                    ref.invalidate(recommendedProfessionalsProvider);
+                    Navigator.pop(context);
+                  },
                   child: Text(
                     tr('filter.see_results'),
                     style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),

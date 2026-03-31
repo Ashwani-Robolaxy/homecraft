@@ -37,27 +37,42 @@ class _ProviderMainScreenState extends State<ProviderMainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       body: _buildCurrentScreen(),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, -5))],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
-          onTap: (index) => setState(() => _selectedIndex = index),
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: AppColors.primaryRed,
-          unselectedItemColor: AppColors.textSecondary,
-          selectedLabelStyle: const TextStyle(fontFamily: 'Outfit', fontSize: 10, fontWeight: FontWeight.bold),
-          unselectedLabelStyle: const TextStyle(fontFamily: 'Outfit', fontSize: 10),
-          items: [
-            BottomNavigationBarItem(icon: const Icon(LucideIcons.layers), label: 'provider.nav.project'.tr()),
-            BottomNavigationBarItem(icon: const Icon(LucideIcons.messageCircle), label: 'provider.nav.message'.tr()),
-            BottomNavigationBarItem(icon: const Icon(LucideIcons.calendar), label: 'provider.nav.calendar'.tr()),
-            BottomNavigationBarItem(icon: const Icon(LucideIcons.user), label: 'provider.nav.profile'.tr()),
-          ],
-        ),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Reddish gradient fade above nav bar
+          Container(
+            height: 18,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [AppColors.primaryRed.withValues(alpha: 0.18), AppColors.primaryRed.withValues(alpha: 0.0)]),
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, -2))],
+            ),
+            child: BottomNavigationBar(
+              currentIndex: _selectedIndex,
+              onTap: (index) => setState(() => _selectedIndex = index),
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: Colors.white,
+              elevation: 0,
+              selectedItemColor: AppColors.primaryRed,
+              unselectedItemColor: AppColors.textSecondary,
+              selectedLabelStyle: const TextStyle(fontFamily: 'Outfit', fontSize: 10, fontWeight: FontWeight.bold),
+              unselectedLabelStyle: const TextStyle(fontFamily: 'Outfit', fontSize: 10),
+              items: [
+                BottomNavigationBarItem(icon: const Icon(LucideIcons.layers), label: 'provider.nav.project'.tr()),
+                BottomNavigationBarItem(icon: const Icon(LucideIcons.messageCircle), label: 'provider.nav.message'.tr()),
+                BottomNavigationBarItem(icon: const Icon(LucideIcons.calendar), label: 'provider.nav.calendar'.tr()),
+                BottomNavigationBarItem(icon: const Icon(LucideIcons.user), label: 'provider.nav.profile'.tr()),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

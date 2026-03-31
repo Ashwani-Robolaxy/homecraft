@@ -15,12 +15,22 @@ class ProviderHomeScreen extends StatefulWidget {
 class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
   bool _isSearchActive = false;
   late ScrollController _dateScrollController;
+  late ScrollController _mainScrollController;
   double _scrollProgress = 0.0;
+  double _headerCollapse = 0.0;
 
   @override
   void initState() {
     super.initState();
     _dateScrollController = ScrollController();
+    _mainScrollController = ScrollController();
+    _mainScrollController.addListener(() {
+      const maxCollapseDistance = 180.0;
+      final value = (_mainScrollController.offset / maxCollapseDistance).clamp(0.0, 1.0);
+      if (value != _headerCollapse) {
+        setState(() => _headerCollapse = value);
+      }
+    });
     _dateScrollController.addListener(() {
       if (_dateScrollController.hasClients) {
         setState(() {
@@ -33,6 +43,7 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
   @override
   void dispose() {
     _dateScrollController.dispose();
+    _mainScrollController.dispose();
     super.dispose();
   }
 
@@ -42,12 +53,30 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(context),
-                Padding(
+          CustomScrollView(
+            controller: _mainScrollController,
+            slivers: [
+              SliverAppBar(
+                pinned: true,
+                stretch: true,
+                expandedHeight: 380,
+                backgroundColor: Colors.white,
+                toolbarHeight: 72,
+                titleSpacing: 0,
+                title: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 180),
+                  opacity: _headerCollapse > 0.5 ? 1 : 0,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildSearchField(compact: true),
+                  ),
+                ),
+                flexibleSpace: FlexibleSpaceBar(
+                  background: _buildSliverHeader(context),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,8 +109,8 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           if (_isSearchActive) _buildSearchOverlay(context),
         ],
@@ -89,72 +118,81 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildSliverHeader(BuildContext context) {
+    final expandedSearchOpacity = (1 - (_headerCollapse * 1.4)).clamp(0.0, 1.0);
+    final logoScale = (1 - (_headerCollapse * 0.2)).clamp(0.86, 1.0);
     return Stack(
+      fit: StackFit.expand,
       children: [
         Container(
-          height: 480, // Increased height to match screenshot proportion
-          width: double.infinity,
           decoration: const BoxDecoration(
             image: DecorationImage(image: AssetImage('assets/images/house_interior.png'), fit: BoxFit.cover),
           ),
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.2), // Subtle overlay
-            padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
+        ),
+        Container(color: Colors.black.withValues(alpha: 0.22)),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 14),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center, // Center content vertically
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Image.asset(
-                  'assets/images/logo_white.png', // AppAssets.logoHorizontalWhite
-                  height: 60,
-                  errorBuilder: (context, error, stackTrace) => Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'H/',
-                        style: GoogleFonts.playfairDisplay(fontSize: 48, color: Colors.white, fontWeight: FontWeight.normal),
-                      ),
-                      Text(
-                        'omeCraft',
-                        style: GoogleFonts.playfairDisplay(fontSize: 42, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 50),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: TextField(
-                    readOnly: true,
-                    onTap: () {
-                      setState(() {
-                        _isSearchActive = true;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'provider.home.search_hint'.tr(),
-                      hintStyle: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w300),
-                      prefixIcon: const Icon(LucideIcons.search, color: Colors.white, size: 22),
-                      suffixIcon: const Icon(LucideIcons.x, color: Colors.white, size: 22),
-                      filled: true,
-                      fillColor: Colors.white.withValues(alpha: 0.1), // Semi-transparent background
-                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(40),
-                        borderSide: const BorderSide(color: Colors.white, width: 2), // White outline
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(40),
-                        borderSide: const BorderSide(color: Colors.white, width: 2),
-                      ),
+                Transform.scale(
+                  scale: logoScale,
+                  child: Image.asset(
+                    'assets/images/logo_white.png',
+                    height: 56,
+                    errorBuilder: (context, error, stackTrace) => Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('H/', style: GoogleFonts.playfairDisplay(fontSize: 44, color: Colors.white)),
+                        Text('omeCraft', style: GoogleFonts.playfairDisplay(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white)),
+                      ],
                     ),
                   ),
+                ),
+                const SizedBox(height: 38),
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 180),
+                  opacity: expandedSearchOpacity,
+                  child: _buildSearchField(compact: false),
                 ),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSearchField({required bool compact}) {
+    final hintColor = compact ? AppColors.textSecondary : Colors.white;
+    final iconColor = compact ? AppColors.textSecondary : Colors.white;
+    final fillColor = compact ? Colors.white : Colors.white.withValues(alpha: 0.12);
+    final borderColor = compact ? AppColors.borderLight : Colors.white.withValues(alpha: compact ? 0.9 : 1);
+    return TextField(
+      readOnly: true,
+      onTap: () => setState(() => _isSearchActive = true),
+      decoration: InputDecoration(
+        hintText: 'provider.home.search_hint'.tr(),
+        hintStyle: GoogleFonts.outfit(
+          color: hintColor,
+          fontWeight: FontWeight.w300,
+          fontSize: compact ? 15 : 18,
+        ),
+        prefixIcon: Icon(LucideIcons.search, color: iconColor, size: 22),
+        suffixIcon: Icon(LucideIcons.x, color: iconColor, size: 22),
+        filled: true,
+        fillColor: fillColor,
+        contentPadding: EdgeInsets.symmetric(vertical: compact ? 10 : 15),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(40),
+          borderSide: BorderSide(color: borderColor, width: compact ? 1.2 : 2),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(40),
+          borderSide: BorderSide(color: compact ? AppColors.primaryRed.withValues(alpha: 0.45) : Colors.white, width: compact ? 1.4 : 2),
+        ),
+      ),
     );
   }
 

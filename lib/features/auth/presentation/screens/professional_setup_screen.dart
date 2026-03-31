@@ -5,8 +5,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/common_app_bar.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
+import '../../../projects/domain/models/project_category.dart';
+import '../../../projects/presentation/providers/project_provider.dart';
 import '../../domain/models/provider_profile.dart';
 import '../providers/auth_provider.dart';
 
@@ -37,19 +40,32 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
   bool _dataLoaded = false;
   bool _saving = false;
   String? _selectedSpecialty;
+  bool _loadingSpecialties = true;
   List<String> _serviceAreas = [];
   List<String> _kbisFiles = [];
   List<String> _projectFiles = [];
   List<String> _certificateFiles = [];
+  List<ProjectCategory> _specialties = const [];
 
-  final List<Map<String, dynamic>> _specialties = [
-    {'name': 'Carpenters', 'icon': LucideIcons.hammer},
-    {'name': 'Painters', 'icon': LucideIcons.palette},
-    {'name': 'Tiler', 'icon': LucideIcons.layoutGrid},
-    {'name': 'Kitchen\'s specialist', 'icon': LucideIcons.utensilsCrossed},
-    {'name': 'Piscinist ( pool maintenance )', 'icon': LucideIcons.waves},
-    {'name': 'Exterior architect', 'icon': LucideIcons.home},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadSpecialties();
+  }
+
+  Future<void> _loadSpecialties() async {
+    try {
+      final categories = await ref.read(projectRepositoryProvider).getCategories();
+      if (!mounted) return;
+      setState(() => _specialties = categories);
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.error('Unable to load categories. Please try again.');
+    } finally {
+      if (!mounted) return;
+      setState(() => _loadingSpecialties = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -105,7 +121,7 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
   Future<void> _submitProfile() async {
     final displayName = _userNameController.text.trim();
     if (displayName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter your name'), backgroundColor: AppColors.primaryRed));
+      AppToast.error('Please enter your name');
       return;
     }
     setState(() => _saving = true);
@@ -145,17 +161,87 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
   void _showSystematicError(String message) {
     final lines = message.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     if (lines.length <= 1) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: AppColors.primaryRed));
+      AppToast.error(message);
       return;
     }
     showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Please fix the following'),
-        content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: lines.map((l) => Text('- $l')).toList()),
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(LucideIcons.alertTriangle, color: AppColors.primaryRed, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Please fix the following',
+                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w500, color: AppColors.textMain),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: lines
+                        .map(
+                          (l) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('- ', style: TextStyle(color: AppColors.textMain, fontSize: 17)),
+                                Expanded(
+                                  child: Text(
+                                    l,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 18,
+                                      height: 1.3,
+                                      color: AppColors.textMain,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primaryRed,
+                    textStyle: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  child: const Text('OK'),
+                ),
+              ),
+            ],
+          ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('OK'))],
       ),
     );
   }
@@ -340,6 +426,10 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
   }
 
   Widget _buildSpecialtyDropdown() {
+    final items = [..._specialties];
+    if (_selectedSpecialty != null && _selectedSpecialty!.isNotEmpty && !items.any((e) => e.name == _selectedSpecialty)) {
+      items.insert(0, ProjectCategory(id: -1, name: _selectedSpecialty!, slug: _selectedSpecialty!.toLowerCase().replaceAll(' ', '-')));
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
@@ -350,25 +440,39 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _selectedSpecialty,
-          hint: Text('Select...', style: GoogleFonts.outfit(color: Colors.black26, fontSize: 14)),
+          hint: Text(_loadingSpecialties ? 'Loading categories...' : 'Select...', style: GoogleFonts.outfit(color: Colors.black26, fontSize: 14)),
           isExpanded: true,
           icon: const Icon(LucideIcons.chevronDown, size: 20, color: Colors.black45),
-          items: _specialties.map((specialty) {
+          items: items.map((specialty) {
             return DropdownMenuItem<String>(
-              value: specialty['name'],
+              value: specialty.name,
               child: Row(
                 children: [
-                  Icon(specialty['icon'], color: AppColors.primaryRed, size: 20),
+                  Icon(_categoryIcon(specialty), color: AppColors.primaryRed, size: 20),
                   const SizedBox(width: 12),
-                  Text(specialty['name'], style: GoogleFonts.outfit(fontSize: 14)),
+                  Text(specialty.name, style: GoogleFonts.outfit(fontSize: 14)),
                 ],
               ),
             );
           }).toList(),
-          onChanged: (value) => setState(() => _selectedSpecialty = value),
+          onChanged: _loadingSpecialties ? null : (value) => setState(() => _selectedSpecialty = value),
         ),
       ),
     );
+  }
+
+  IconData _categoryIcon(ProjectCategory category) {
+    final key = '${category.slug} ${category.name}'.toLowerCase();
+    if (key.contains('plumb')) return LucideIcons.wrench;
+    if (key.contains('paint')) return LucideIcons.palette;
+    if (key.contains('tile')) return LucideIcons.layoutGrid;
+    if (key.contains('kitchen')) return LucideIcons.utensilsCrossed;
+    if (key.contains('pool') || key.contains('pisc')) return LucideIcons.waves;
+    if (key.contains('exterior') || key.contains('architect')) return LucideIcons.home;
+    if (key.contains('carpent') || key.contains('wood')) return LucideIcons.hammer;
+    if (key.contains('clean')) return LucideIcons.sparkles;
+    if (key.contains('electric')) return LucideIcons.zap;
+    return LucideIcons.briefcase;
   }
 
   Widget _buildUploadButton(String label, {String? hint, VoidCallback? onTap}) {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_state_notifier.dart';
+import '../services/app_toast.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/onboarding/presentation/screens/splash_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
@@ -23,7 +24,9 @@ import '../../features/projects/presentation/screens/service_details_screen.dart
 import '../../features/home/presentation/screens/professional_results_screen.dart';
 import '../../features/home/presentation/screens/map_screen.dart';
 import '../../features/home/presentation/screens/take_action_screen.dart';
+import '../../features/report/domain/report_args.dart';
 import '../../features/home/presentation/screens/chat_screen.dart';
+import '../../features/chat/presentation/professional_chat_args.dart';
 import '../../features/home/presentation/screens/media_screen.dart';
 import '../../features/auth/presentation/screens/professional_setup_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart' as profile;
@@ -40,12 +43,17 @@ import '../../features/profile/presentation/screens/notification_preference_scre
 import '../../features/profile/presentation/screens/accepted_projects_screen.dart';
 import '../../features/profile/presentation/screens/provider_favorites_screen.dart';
 import '../../features/profile/presentation/screens/subscription_plans_screen.dart';
+import '../../features/portfolio/presentation/screens/portfolio_management_screen.dart';
 import '../../features/projects/domain/models/project.dart';
+import '../../features/professionals/presentation/screens/professional_detail_screen.dart';
+import '../../features/professionals/domain/models/professional_listing.dart';
+import '../../features/booking/presentation/screens/create_booking_screen.dart';
 
 const _publicPaths = ['/splash', '/onboarding', '/login', '/register', '/forgot-password', '/terms', '/privacy', '/verify-otp', '/reset-password'];
 
 GoRouter _createRouter(AuthStateNotifier authNotifier) {
   return GoRouter(
+    navigatorKey: AppToast.navigatorKey,
     refreshListenable: authNotifier,
     initialLocation: '/splash',
     redirect: (context, state) {
@@ -89,10 +97,36 @@ final List<RouteBase> _routes = [
     ),
     GoRoute(path: '/service-details', builder: (context, state) => const ServiceDetailsScreen()),
     GoRoute(path: '/professional-results', builder: (context, state) => const ProfessionalResultsScreen()),
+    GoRoute(
+      path: '/professional-detail',
+      builder: (context, state) {
+        final listing = state.extra as ProfessionalListing;
+        return ProfessionalDetailScreen(listing: listing);
+      },
+    ),
     GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
-    GoRoute(path: '/take-action', builder: (context, state) => const TakeActionScreen()),
-    GoRoute(path: '/chat', builder: (context, state) => const ChatScreen()),
-    GoRoute(path: '/media', builder: (context, state) => const MediaScreen()),
+    GoRoute(
+      path: '/take-action',
+      builder: (context, state) {
+        final args = state.extra is ReportArgs ? state.extra as ReportArgs : null;
+        return TakeActionScreen(args: args);
+      },
+    ),
+    GoRoute(
+      path: '/chat',
+      builder: (context, state) {
+        final extra = state.extra;
+        final args = extra is ProfessionalChatArgs ? extra : null;
+        return ChatScreen(args: args);
+      },
+    ),
+    GoRoute(
+      path: '/media',
+      builder: (context, state) {
+        final proId = state.extra is String ? state.extra as String : null;
+        return MediaScreen(professionalId: proId);
+      },
+    ),
     GoRoute(path: '/professional-setup', builder: (context, state) => const ProfessionalSetupScreen()),
     GoRoute(path: '/provider-home', builder: (context, state) => const ProviderMainScreen()),
     GoRoute(path: '/edit-calendar', builder: (context, state) => const EditCalendarScreen()),
@@ -110,4 +144,19 @@ final List<RouteBase> _routes = [
     GoRoute(path: '/accepted-projects', builder: (context, state) => const AcceptedProjectsScreen()),
     GoRoute(path: '/provider-favorites', builder: (context, state) => const ProviderFavoritesScreen()),
     GoRoute(path: '/subscription-plans', builder: (context, state) => const SubscriptionPlansScreen()),
+    GoRoute(path: '/professional-portfolio', builder: (context, state) => const PortfolioManagementScreen()),
+    GoRoute(
+      path: '/create-booking',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return CreateBookingScreen(
+          args: CreateBookingArgs(
+            professionalId: (extra['professionalId'] ?? '').toString(),
+            professionalName: (extra['professionalName'] ?? 'Professional').toString(),
+            professionalPhoto: extra['professionalPhoto']?.toString(),
+            professionalProfession: extra['professionalProfession']?.toString(),
+          ),
+        );
+      },
+    ),
   ];

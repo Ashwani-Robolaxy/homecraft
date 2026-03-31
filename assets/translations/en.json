@@ -17,7 +17,7 @@
     }
   },
   "professionals": {
-    "title": "professionals",
+    "title": "Professionals",
     "search_hint": "Search location",
     "results_summary": "Results for \"{location}, {category}, the {date}\"",
     "found_count": "{count} Found"
@@ -159,6 +159,8 @@
     "add_limit_info": "you can add 2 projects/Month",
     "remaining_count": "Remaining Project {count}/2",
     "my_projects": "My Project",
+    "open_project_badge": "Open project",
+    "client_fallback": "Client",
     "form": {
       "title": "New Project",
       "project_title_label": "Project Title",
@@ -282,7 +284,7 @@
       "choose_plans": "Choose your plans",
       "showcase_skills": "Showcase your skills",
       "let_start_work": "Let start work and get more.",
-      "contact_support_title": "contact support",
+      "contact_support_title": "Contact Support",
       "message_hint": "Type your message",
       "notification_preference_title": "Notification preference",
       "notification_method": "Notification method",

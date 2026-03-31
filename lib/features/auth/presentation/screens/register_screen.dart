@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_assets.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
 import '../../domain/models/app_user.dart';
 import '../providers/auth_provider.dart';
@@ -45,9 +46,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _submit() async {
     if (!_termsAccepted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('auth.validation.terms_required'.tr()), backgroundColor: AppColors.primaryRed),
-      );
+      AppToast.error('auth.validation.terms_required'.tr());
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -64,9 +63,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (result.errorMessage != null) {
       final msg = result.errorMessage!;
       final display = msg.startsWith('auth.') ? msg.tr() : msg;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(display), backgroundColor: AppColors.primaryRed),
-      );
+      AppToast.error(display);
       return;
     }
     await ref.read(authStateNotifierProvider).refresh();

@@ -67,11 +67,16 @@ class ProviderProfile {
   }
 
   Map<String, dynamic> toCompleteProfileApiMap() {
+    final normalizedWebsite = _normalizeUrlOrNull(website);
+    final normalizedKbis = _normalizeUrlOrNull(
+      kbisExtractUrl,
+      requireSchemeOrWww: true,
+    );
     final socialMediaLinks = <String>[
-      if (socialInstagram != null && socialInstagram!.isNotEmpty) socialInstagram!,
-      if (socialFacebook != null && socialFacebook!.isNotEmpty) socialFacebook!,
-      if (socialTwitter != null && socialTwitter!.isNotEmpty) socialTwitter!,
-      if (socialLinkedin != null && socialLinkedin!.isNotEmpty) socialLinkedin!,
+      if (_normalizeUrlOrNull(socialInstagram) case final value?) value,
+      if (_normalizeUrlOrNull(socialFacebook) case final value?) value,
+      if (_normalizeUrlOrNull(socialTwitter) case final value?) value,
+      if (_normalizeUrlOrNull(socialLinkedin) case final value?) value,
     ];
     return {
       'username': displayName,
@@ -84,13 +89,31 @@ class ProviderProfile {
       'companyAddress': companyAddress ?? '',
       'postalCode': postalCode ?? '',
       'siretNumber': siret ?? '',
-      'kbisExtractUrl': kbisExtractUrl,
+      'kbisExtractUrl': normalizedKbis,
       'projectUploads': projectUploads,
       'certificateUploads': certificateUploads,
       'serviceAreaCities': serviceAreas,
-      'websiteUrl': website,
+      'websiteUrl': normalizedWebsite,
       'socialMediaLinks': socialMediaLinks,
     };
+  }
+
+  static String? _normalizeUrlOrNull(String? raw, {bool requireSchemeOrWww = false}) {
+    if (raw == null) return null;
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+    final lower = value.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) return value;
+    if (lower.startsWith('www.')) return 'https://$value';
+    if (requireSchemeOrWww) return null;
+    if (_looksLikeDomain(value)) return 'https://$value';
+    return null;
+  }
+
+  static bool _looksLikeDomain(String value) {
+    if (value.contains(' ')) return false;
+    final regex = RegExp(r'^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+([/?#].*)?$');
+    return regex.hasMatch(value);
   }
 
   factory ProviderProfile.fromMap(Map<String, dynamic>? map) {

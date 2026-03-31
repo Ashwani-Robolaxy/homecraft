@@ -3,6 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app_shimmer.dart';
 import '../../domain/models/project.dart';
 
 class ProjectCard extends StatelessWidget {
@@ -38,11 +39,12 @@ class ProjectCard extends StatelessWidget {
                   fit: BoxFit.cover,
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
-                    return Container(
-                      height: 180,
-                      width: double.infinity,
-                      color: Colors.grey[100],
-                      child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed)),
+                    return AppShimmer(
+                      child: ShimmerBox(
+                        width: double.infinity,
+                        height: 180,
+                        radius: 0,
+                      ),
                     );
                   },
                   errorBuilder: (context, error, stackTrace) => Container(

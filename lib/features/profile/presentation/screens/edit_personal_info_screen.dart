@@ -2,13 +2,18 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/common_app_bar.dart';
 import '../../../auth/domain/models/provider_profile.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../projects/domain/models/project_category.dart';
+import '../../../projects/presentation/providers/project_provider.dart';
 
 class EditPersonalInfoScreen extends ConsumerStatefulWidget {
   const EditPersonalInfoScreen({super.key});
@@ -37,17 +42,32 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
   final List<String> _uploadedProjects = ['Projects.jpg'];
   final List<String> _uploadedCerts = ['Certificate.jpg'];
   String? _selectedSpecialty;
-  final List<String> _specialties = const [
-    'Carpenters',
-    'Painters',
-    'Tiler',
-    'Kitchen\'s specialist',
-    'Piscinist ( pool maintenance )',
-    'Exterior architect',
-  ];
+  List<ProjectCategory> _specialties = const [];
+  bool _loadingSpecialties = true;
   bool _dataLoaded = false;
   bool _saving = false;
+  bool _detectingCity = false;
   String? _kbisFile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSpecialties();
+  }
+
+  Future<void> _loadSpecialties() async {
+    try {
+      final categories = await ref.read(projectRepositoryProvider).getCategories();
+      if (!mounted) return;
+      setState(() => _specialties = categories);
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.error('Unable to load categories. Please try again.');
+    } finally {
+      if (!mounted) return;
+      setState(() => _loadingSpecialties = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -104,13 +124,49 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
     }
   }
 
+  Future<void> _detectCity() async {
+    setState(() => _detectingCity = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) {
+        if (mounted) AppToast.error('Location permission is required to detect your city.');
+        return;
+      }
+      Position? pos = await Geolocator.getLastKnownPosition();
+      pos ??= await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.low),
+      ).timeout(const Duration(seconds: 10));
+      final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
+      if (!mounted) return;
+      final place = placemarks.firstOrNull;
+      final city = place?.locality?.isNotEmpty == true
+          ? place!.locality!
+          : place?.subAdministrativeArea?.isNotEmpty == true
+              ? place!.subAdministrativeArea!
+              : place?.administrativeArea ?? '';
+      if (city.isNotEmpty) {
+        _addressController.text = city;
+        AppToast.success('City detected: $city');
+      } else {
+        AppToast.error('Could not determine city from your location.');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.error('Could not detect location. Please enter your city manually.');
+    } finally {
+      if (mounted) setState(() => _detectingCity = false);
+    }
+  }
+
   Future<void> _saveProfile() async {
     final displayName = _userNameController.text.trim();
     if (displayName.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('auth.validation.username_required'.tr()), backgroundColor: AppColors.primaryRed),
-        );
+        AppToast.error('auth.validation.username_required'.tr());
       }
       return;
     }
@@ -155,28 +211,87 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
         .where((e) => e.isNotEmpty)
         .toList();
     if (lines.length <= 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: AppColors.primaryRed),
-      );
+      AppToast.error(message);
       return;
     }
     showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Please fix the following'),
-        content: SingleChildScrollView(
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: lines.map((l) => Text('- $l')).toList(),
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(LucideIcons.alertTriangle, color: AppColors.primaryRed, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Please fix the following',
+                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w500, color: AppColors.textMain),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: lines
+                        .map(
+                          (l) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('- ', style: TextStyle(color: AppColors.textMain, fontSize: 17)),
+                                Expanded(
+                                  child: Text(
+                                    l,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 18,
+                                      height: 1.3,
+                                      color: AppColors.textMain,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primaryRed,
+                    textStyle: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  child: const Text('OK'),
+                ),
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
       ),
     );
   }
@@ -216,28 +331,48 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
             const SizedBox(height: 24),
             _sectionTitle('Choose your specialty'),
             const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: _selectedSpecialty,
-              hint: Text('Select...', style: GoogleFonts.outfit(fontSize: 14, color: Colors.black38)),
-              items: _specialties
-                  .map((s) => DropdownMenuItem<String>(
-                        value: s,
-                        child: Text(s, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMain)),
-                      ))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedSpecialty = v),
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.borderLight),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.borderLight),
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              ),
-              icon: const Icon(LucideIcons.chevronDown, size: 20, color: AppColors.textSecondary),
+            Builder(
+              builder: (_) {
+                final items = [..._specialties];
+                if (_selectedSpecialty != null &&
+                    _selectedSpecialty!.isNotEmpty &&
+                    !items.any((e) => e.name == _selectedSpecialty)) {
+                  items.insert(
+                    0,
+                    ProjectCategory(
+                      id: -1,
+                      name: _selectedSpecialty!,
+                      slug: _selectedSpecialty!.toLowerCase().replaceAll(' ', '-'),
+                    ),
+                  );
+                }
+                return DropdownButtonFormField<String>(
+                  value: _selectedSpecialty,
+                  hint: Text(
+                    _loadingSpecialties ? 'Loading categories...' : 'Select...',
+                    style: GoogleFonts.outfit(fontSize: 14, color: Colors.black38),
+                  ),
+                  items: items
+                      .map((s) => DropdownMenuItem<String>(
+                            value: s.name,
+                            child: Text(s.name, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMain)),
+                          ))
+                      .toList(),
+                  onChanged: _loadingSpecialties ? null : (v) => setState(() => _selectedSpecialty = v),
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.borderLight),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                  icon: const Icon(LucideIcons.chevronDown, size: 20, color: AppColors.textSecondary),
+                );
+              },
             ),
             const SizedBox(height: 24),
             _sectionTitle('Company Info.'),
@@ -412,6 +547,30 @@ class _EditPersonalInfoScreenState extends ConsumerState<EditPersonalInfoScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _cityInput() {
+    return TextField(
+      controller: _addressController,
+      decoration: InputDecoration(
+        hintText: 'City / Address',
+        hintStyle: GoogleFonts.outfit(color: Colors.black38, fontSize: 14),
+        prefixIcon: const Icon(LucideIcons.mapPin, size: 20, color: AppColors.primaryRed),
+        suffixIcon: _detectingCity
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed)),
+              )
+            : IconButton(
+                tooltip: 'Detect my city',
+                onPressed: _detectCity,
+                icon: const Icon(LucideIcons.locateFixed, color: AppColors.primaryRed, size: 20),
+              ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.borderLight)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.borderLight)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
   }

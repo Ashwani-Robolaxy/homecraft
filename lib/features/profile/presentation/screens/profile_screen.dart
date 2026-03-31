@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -5,106 +6,150 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../widgets/profile_hero_header.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9F9F9),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(context),
-            const SizedBox(height: 20),
-            _buildMenuSection(context, ref),
-            const SizedBox(height: 100), // Bottom padding for navigation bar
-          ],
-        ),
-      ),
-    );
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  final ValueNotifier<double> _headerExpandT = ValueNotifier(1.0);
+  static const double _expandedBody = 248;
+
+  @override
+  void dispose() {
+    _headerExpandT.dispose();
+    super.dispose();
   }
 
-  Widget _buildHeader(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        ClipPath(
-          clipper: HeaderClipper(),
-          child: Container(
-            height: 300,
-            decoration: const BoxDecoration(
-              image: DecorationImage(image: AssetImage('assets/images/texture_bg.jpg'), fit: BoxFit.cover),
+  void _deferHeaderExpandT(double t) {
+    if ((_headerExpandT.value - t).abs() <= 0.002) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if ((_headerExpandT.value - t).abs() > 0.002) {
+        _headerExpandT.value = t;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authStateNotifierProvider).currentUser;
+    final displayName = user?.displayName ?? '';
+    final top = MediaQuery.paddingOf(context).top;
+    final expandedHeight = _expandedBody + top;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            stretch: true,
+            automaticallyImplyLeading: false,
+            expandedHeight: expandedHeight,
+            toolbarHeight: kToolbarHeight,
+            backgroundColor: Colors.black,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            title: ValueListenableBuilder<double>(
+              valueListenable: _headerExpandT,
+              builder: (context, t, _) {
+                final show = (1.0 - t).clamp(0.0, 1.0);
+                return IgnorePointer(
+                  ignoring: show < 0.05,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 120),
+                    opacity: show,
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: Colors.grey[300],
+                          backgroundImage: const AssetImage('assets/images/cleaner_profile_1.png'),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            displayName.isEmpty ? tr('home.tabs.profile') : displayName,
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black.withValues(alpha: 0.8), AppColors.primaryRed.withValues(alpha: 0.6)]),
-              ),
+            flexibleSpace: LayoutBuilder(
+              builder: (context, constraints) {
+                final minH = kToolbarHeight + top;
+                final maxH = expandedHeight;
+                final range = (maxH - minH).clamp(1.0, double.infinity);
+                final t = ((constraints.maxHeight - minH) / range).clamp(0.0, 1.0);
+                _deferHeaderExpandT(t);
+                return ProfileHeroHeader(
+                  displayName: displayName,
+                  expandT: t,
+                  emptyNameFallback: tr('home.tabs.profile'),
+                );
+              },
             ),
           ),
-        ),
-        Positioned(
-          bottom: 20,
-          child: Column(
-            children: [
-              Stack(
-                alignment: Alignment.bottomRight,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                    child: const CircleAvatar(radius: 65, backgroundImage: AssetImage('assets/images/cleaner_profile_1.png')),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(color: Color(0xFF0095FF), shape: BoxShape.circle),
-                    child: const Icon(Icons.check, color: Colors.white, size: 20),
-                  ),
-                ],
-              ),
-            ],
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+              child: _buildMenuSection(context, ref),
+            ),
           ),
-        ),
-      ],
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        ],
+      ),
     );
   }
 
   Widget _buildMenuSection(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        children: [
-          _buildMenuCard([
-            _buildMenuItem(icon: LucideIcons.user, title: 'Personal Info', onTap: () => context.push('/personal-info')),
-            const Divider(height: 1),
-            _buildMenuItem(icon: LucideIcons.bell, title: 'Notification', onTap: () {}),
-          ]),
-          const SizedBox(height: 20),
-          _buildMenuCard([_buildMenuItem(icon: LucideIcons.helpCircle, title: 'Contact Support', onTap: () => context.push('/contact-support'))]),
-          const SizedBox(height: 20),
-          _buildMenuCard([
-            _buildMenuItem(icon: LucideIcons.settings, title: 'Settings', onTap: () => context.push('/settings')),
-            const Divider(height: 1),
-            _buildMenuItem(icon: LucideIcons.fileText, title: 'Term & Condition', onTap: () => context.push('/terms-of-service')),
-            const Divider(height: 1),
-            _buildMenuItem(icon: LucideIcons.shieldAlert, title: 'Privacy Ppolicy', onTap: () => context.push('/privacy-policy')),
-            const Divider(height: 1),
-            _buildMenuItem(icon: LucideIcons.helpCircle, title: 'FAQ - ABOUT US', onTap: () => context.push('/about-us')),
-          ]),
-          const SizedBox(height: 20),
-          _buildMenuCard([
-            _buildMenuItem(
-              icon: LucideIcons.logOut,
-              title: 'Log Out',
-              onTap: () async {
-                await ref.read(authRepositoryProvider).signOut();
-                if (context.mounted) context.go('/splash');
-              },
-            ),
-          ]),
-        ],
-      ),
+    return Column(
+      children: [
+        _buildMenuCard([
+          _buildMenuItem(icon: LucideIcons.user, title: 'Personal Info', onTap: () => context.push('/personal-info')),
+          const Divider(height: 1),
+          _buildMenuItem(icon: LucideIcons.bell, title: 'Notification', onTap: () {}),
+        ]),
+        const SizedBox(height: 20),
+        _buildMenuCard([_buildMenuItem(icon: LucideIcons.helpCircle, title: 'Contact Support', onTap: () => context.push('/contact-support'))]),
+        const SizedBox(height: 20),
+        _buildMenuCard([
+          _buildMenuItem(icon: LucideIcons.settings, title: 'Settings', onTap: () => context.push('/settings')),
+          const Divider(height: 1),
+          _buildMenuItem(icon: LucideIcons.fileText, title: 'Term & Condition', onTap: () => context.push('/terms-of-service')),
+          const Divider(height: 1),
+          _buildMenuItem(icon: LucideIcons.shieldAlert, title: 'Privacy Policy', onTap: () => context.push('/privacy-policy')),
+          const Divider(height: 1),
+          _buildMenuItem(icon: LucideIcons.helpCircle, title: 'FAQ - ABOUT US', onTap: () => context.push('/about-us')),
+        ]),
+        const SizedBox(height: 20),
+        _buildMenuCard([
+          _buildMenuItem(
+            icon: LucideIcons.logOut,
+            title: 'Log Out',
+            onTap: () async {
+              await ref.read(authRepositoryProvider).signOut();
+              if (context.mounted) context.go('/splash');
+            },
+          ),
+        ]),
+      ],
     );
   }
 
@@ -135,19 +180,4 @@ class ProfileScreen extends ConsumerWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
-}
-
-class HeaderClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    Path path = Path();
-    path.lineTo(0, size.height - 80);
-    path.quadraticBezierTo(size.width / 2, size.height, size.width, size.height - 80);
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

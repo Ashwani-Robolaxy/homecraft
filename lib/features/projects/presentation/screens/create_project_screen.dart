@@ -1,27 +1,70 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
 import '../../../auth/presentation/widgets/custom_text_field.dart';
+import '../../domain/models/project_category.dart';
+import '../../domain/repositories/project_repository.dart';
+import '../providers/project_provider.dart';
 
 import '../../../../core/widgets/common_app_bar.dart';
 
-class CreateProjectScreen extends StatefulWidget {
+class CreateProjectScreen extends ConsumerStatefulWidget {
   const CreateProjectScreen({super.key});
 
   @override
-  State<CreateProjectScreen> createState() => _CreateProjectScreenState();
+  ConsumerState<CreateProjectScreen> createState() => _CreateProjectScreenState();
 }
 
-class _CreateProjectScreenState extends State<CreateProjectScreen> {
+class _CreateProjectScreenState extends ConsumerState<CreateProjectScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _dateController = TextEditingController();
   final TextEditingController _budgetController = TextEditingController();
-  String? _selectedCategory;
+  List<ProjectCategory> _categories = const [];
+  ProjectCategory? _selectedCategory;
+  String? _attachmentPath;
+  String? _attachmentName;
+  bool _isSubmitting = false;
+  bool _isLoadingCategories = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await ref.read(projectRepositoryProvider).getCategories();
+      if (!mounted) return;
+      setState(() {
+        _categories = categories;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.error('Unable to load categories. Please try again.');
+    } finally {
+      if (!mounted) return;
+      setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _locationController.dispose();
+    _dateController.dispose();
+    _budgetController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,10 +112,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
             PrimaryGradientButton(
               text: tr('projects.form.submit'),
-              onPressed: () {
-                // Submit logic
-                context.pop();
-              },
+              isLoading: _isSubmitting,
+              onPressed: () => _submit(),
             ),
             const SizedBox(height: 20),
           ],
@@ -92,10 +133,10 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   }
 
   Widget _buildDropdown() {
-    String? categoryName = _selectedCategory != null ? tr('projects.categories.$_selectedCategory') : null;
+    final categoryName = _selectedCategory?.name;
 
     return InkWell(
-      onTap: _showCategoryPicker,
+      onTap: _isLoadingCategories ? null : _showCategoryPicker,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -106,7 +147,10 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(categoryName ?? tr('projects.form.category_hint'), style: TextStyle(color: categoryName != null ? AppColors.textMain : AppColors.textSecondary, fontSize: 14)),
+            Text(
+              _isLoadingCategories ? 'Loading categories...' : (categoryName ?? tr('projects.form.category_hint')),
+              style: TextStyle(color: categoryName != null ? AppColors.textMain : AppColors.textSecondary, fontSize: 14),
+            ),
             const Icon(LucideIcons.chevronDown, size: 20, color: AppColors.textSecondary),
           ],
         ),
@@ -115,14 +159,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   }
 
   void _showCategoryPicker() {
-    final List<Map<String, dynamic>> categories = [
-      {'key': 'carpenters', 'icon': LucideIcons.hammer},
-      {'key': 'painters', 'icon': LucideIcons.paintbrush},
-      {'key': 'tiler', 'icon': LucideIcons.layoutGrid},
-      {'key': 'kitchen_specialist', 'icon': LucideIcons.chefHat},
-      {'key': 'piscinist', 'icon': LucideIcons.waves},
-      {'key': 'exterior_architect', 'icon': LucideIcons.compass},
-    ];
+    if (_categories.isEmpty) return;
 
     showModalBottomSheet(
       context: context,
@@ -148,25 +185,31 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: categories.length,
+                  itemCount: _categories.length,
                   itemBuilder: (context, index) {
-                    final cat = categories[index];
-                    final isSelected = _selectedCategory == cat['key'];
+                    final cat = _categories[index];
+                    final isSelected = _selectedCategory?.id == cat.id;
+                    final iconOptions = [
+                      LucideIcons.hammer,
+                      LucideIcons.paintbrush,
+                      LucideIcons.layoutGrid,
+                      LucideIcons.chefHat,
+                      LucideIcons.waves,
+                      LucideIcons.compass,
+                    ];
+                    final icon = iconOptions[index % iconOptions.length];
 
                     return ListTile(
                       onTap: () {
-                        setState(() => _selectedCategory = cat['key']);
+                        setState(() => _selectedCategory = cat);
                         Navigator.pop(context);
                       },
                       leading: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(color: AppColors.primaryRed.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                        child: Icon(cat['icon'], size: 20, color: AppColors.primaryRed),
+                        child: Icon(icon, size: 20, color: AppColors.primaryRed),
                       ),
-                      title: Text(
-                        tr('projects.categories.${cat['key']}'),
-                        style: TextStyle(fontFamily: 'Outfit', fontSize: 16, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: AppColors.textMain),
-                      ),
+                      title: Text(cat.name, style: TextStyle(fontFamily: 'Outfit', fontSize: 16, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: AppColors.textMain)),
                       trailing: isSelected ? const Icon(LucideIcons.check, color: AppColors.primaryRed, size: 20) : null,
                     );
                   },
@@ -201,9 +244,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
   Widget _buildAttachmentButton() {
     return InkWell(
-      onTap: () {
-        // File picker logic
-      },
+      onTap: _pickAttachment,
       child: Container(
         height: 50,
         decoration: BoxDecoration(
@@ -216,11 +257,29 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           children: [
             const Icon(LucideIcons.uploadCloud, color: AppColors.primaryRed, size: 20),
             const SizedBox(width: 8),
-            Text(tr('projects.form.attachment_button'), style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+            Flexible(
+              child: Text(
+                _attachmentName ?? tr('projects.form.attachment_button'),
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _pickAttachment() async {
+    final file = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'zip'],
+    );
+    if (!mounted || file == null || file.files.isEmpty) return;
+    setState(() {
+      _attachmentPath = file.files.first.path;
+      _attachmentName = file.files.first.name;
+    });
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -249,5 +308,47 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         _dateController.text = DateFormat('MM/dd/yyyy').format(picked);
       });
     }
+  }
+
+  Future<void> _submit() async {
+    final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
+    final location = _locationController.text.trim();
+    final budget = _budgetController.text.trim();
+    if (title.isEmpty || description.isEmpty || location.isEmpty || _dateController.text.trim().isEmpty || _selectedCategory == null) {
+      AppToast.error('Please fill all required fields.');
+      return;
+    }
+
+    String desiredDate;
+    try {
+      final parsed = DateFormat('MM/dd/yyyy').parseStrict(_dateController.text.trim());
+      desiredDate = DateFormat('yyyy-MM-dd').format(parsed);
+    } catch (_) {
+      AppToast.error('Please choose a valid desired date.');
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    final result = await ref.read(projectRepositoryProvider).createProject(
+          CreateProjectInput(
+            title: title,
+            description: description,
+            categoryId: _selectedCategory!.id,
+            location: location,
+            desiredDate: desiredDate,
+            budget: budget.isEmpty ? null : budget,
+            attachmentPath: _attachmentPath,
+          ),
+        );
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    if (result.errorMessage != null) {
+      AppToast.error(result.errorMessage!);
+      return;
+    }
+    AppToast.success('Project created successfully');
+    context.pop(true);
   }
 }

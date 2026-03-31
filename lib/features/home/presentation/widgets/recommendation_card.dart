@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:easy_localization/easy_localization.dart';
-import '../../../../core/constants/app_colors.dart';
 
 class RecommendationCard extends StatelessWidget {
   final String category;
@@ -12,6 +11,9 @@ class RecommendationCard extends StatelessWidget {
   final String name;
   final String backgroundAsset;
   final String profileAsset;
+  final String? backgroundImageUrl;
+  final String? profileImageUrl;
+  final VoidCallback? onTap;
 
   const RecommendationCard({
     super.key,
@@ -23,11 +25,45 @@ class RecommendationCard extends StatelessWidget {
     required this.name,
     required this.backgroundAsset,
     required this.profileAsset,
+    this.backgroundImageUrl,
+    this.profileImageUrl,
+    this.onTap,
   });
+
+  static Widget _coverImage({
+    required String? networkUrl,
+    required String assetPath,
+    required BoxFit fit,
+  }) {
+    if (networkUrl != null && networkUrl.isNotEmpty) {
+      return Image.network(
+        networkUrl,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) => Image.asset(
+          assetPath,
+          fit: fit,
+          errorBuilder: (context, _, __) => Container(
+            color: Colors.grey[300],
+            child: Center(child: Icon(LucideIcons.image, color: Colors.white.withValues(alpha: 0.3), size: 32)),
+          ),
+        ),
+      );
+    }
+    return Image.asset(
+      assetPath,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => Container(
+        color: Colors.grey[300],
+        child: Center(child: Icon(LucideIcons.image, color: Colors.white.withValues(alpha: 0.3), size: 32)),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 16),
       height: 160,
       decoration: BoxDecoration(
@@ -37,20 +73,12 @@ class RecommendationCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Row(
         children: [
-          // Left Side: Project Image
           Expanded(
             flex: 2,
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.asset(
-                  backgroundAsset,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey[300],
-                    child: Center(child: Icon(LucideIcons.image, color: Colors.white.withValues(alpha: 0.3), size: 32)),
-                  ),
-                ),
+                _coverImage(networkUrl: backgroundImageUrl, assetPath: backgroundAsset, fit: BoxFit.cover),
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -98,19 +126,11 @@ class RecommendationCard extends StatelessWidget {
               ],
             ),
           ),
-          // Right Side: Provider Info
           Expanded(
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.asset(
-                  profileAsset,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey[200],
-                    child: Center(child: Icon(LucideIcons.user, color: AppColors.primaryRed.withValues(alpha: 0.2), size: 24)),
-                  ),
-                ),
+                _coverImage(networkUrl: profileImageUrl, assetPath: profileAsset, fit: BoxFit.cover),
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -147,6 +167,7 @@ class RecommendationCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

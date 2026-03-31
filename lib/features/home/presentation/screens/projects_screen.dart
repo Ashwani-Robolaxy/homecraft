@@ -1,20 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/app_toast.dart';
+import '../../../projects/domain/models/project.dart';
+import '../../../projects/presentation/providers/project_provider.dart';
+import '../../../chat/presentation/professional_chat_args.dart';
+import 'chat_screen.dart';
 import '../widgets/project_filter_overlay.dart';
 import 'map_screen.dart';
 import 'project_details_screen.dart';
+import '../../../../core/widgets/app_shimmer.dart';
 
-class ProjectsScreen extends StatefulWidget {
+class ProjectsScreen extends ConsumerStatefulWidget {
   const ProjectsScreen({super.key});
 
   @override
-  State<ProjectsScreen> createState() => _ProjectsScreenState();
+  ConsumerState<ProjectsScreen> createState() => _ProjectsScreenState();
 }
 
-class _ProjectsScreenState extends State<ProjectsScreen> {
+class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
   bool _showFilter = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,43 +50,27 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                         children: [
                           _buildSearchBar(),
                           const SizedBox(height: 12),
-                          Text(
-                            'Limitation 3/4',
-                            style: GoogleFonts.outfit(
-                              fontSize: 12,
-                              color: Colors.black54,
-                            ),
+                          Consumer(
+                            builder: (context, ref, _) {
+                              final projectsAsync = ref.watch(professionalProjectsProvider);
+                              return projectsAsync.when(
+                                data: (projects) => Text(
+                                  'Projects: ${projects.length}',
+                                  style: GoogleFonts.outfit(fontSize: 12, color: Colors.black54),
+                                ),
+                                loading: () => Text(
+                                  'Loading projects...',
+                                  style: GoogleFonts.outfit(fontSize: 12, color: Colors.black54),
+                                ),
+                                error: (_, __) => Text(
+                                  'Projects: --',
+                                  style: GoogleFonts.outfit(fontSize: 12, color: Colors.black54),
+                                ),
+                              );
+                            },
                           ),
                           const SizedBox(height: 16),
-                          _buildProjectCard(
-                            image: 'assets/images/garden.png',
-                            title: 'Gardeners, landscaper',
-                            price: '€ 200',
-                            location: 'New York, US',
-                            date: 'Jun 14, 2025',
-                            description:
-                                "Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
-                          ),
-                          const SizedBox(height: 16),
-                          _buildProjectCard(
-                            image: 'assets/images/garden.png',
-                            title: 'Gardeners, landscaper',
-                            price: '€ 200',
-                            location: 'New York, US',
-                            date: 'Jun 14, 2025',
-                            description:
-                                "Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
-                          ),
-                          const SizedBox(height: 16),
-                          _buildProjectCard(
-                            image: 'assets/images/garden.png',
-                            title: 'Gardeners, landscaper',
-                            price: '€ 200',
-                            location: 'New York, US',
-                            date: 'Jun 14, 2025',
-                            description:
-                                "Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s,",
-                          ),
+                          _buildProjectsList(),
                           const SizedBox(height: 20),
                         ],
                       ),
@@ -143,6 +141,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         ],
       ),
       child: TextField(
+        controller: _searchController,
+        onChanged: (_) => setState(() {}),
         decoration: InputDecoration(
           hintText: 'Search Projects',
           hintStyle: GoogleFonts.outfit(color: Colors.black26),
@@ -165,19 +165,129 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     );
   }
 
+  Widget _buildProjectsList() {
+    final projectsAsync = ref.watch(professionalProjectsProvider);
+    return projectsAsync.when(
+      loading: () => const _ProjectsShimmer(),
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.only(top: 16),
+        child: Column(
+          children: [
+            Text('Unable to load projects.', style: GoogleFonts.outfit(fontSize: 14, color: Colors.black54)),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => ref.invalidate(professionalProjectsProvider),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+      data: (projects) {
+        final query = _searchController.text.trim().toLowerCase();
+        final filtered = query.isEmpty
+            ? projects
+            : projects
+                .where(
+                  (p) =>
+                      p.title.toLowerCase().contains(query) ||
+                      p.location.toLowerCase().contains(query) ||
+                      (p.serviceType ?? '').toLowerCase().contains(query),
+                )
+                .toList();
+        if (query.isEmpty && projects.isEmpty) {
+          return _buildEmptyState();
+        }
+        if (filtered.isEmpty) {
+          return _buildNoSearchResultState();
+        }
+        return Column(
+          children: [
+            for (final p in filtered) ...[
+              _buildProjectCard(project: p),
+              const SizedBox(height: 16),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 48),
+      child: Center(
+        child: Column(
+          children: [
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                color: AppColors.primaryRed.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(LucideIcons.clipboardList, color: AppColors.primaryRed, size: 36),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No projects available right now',
+              style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textMain),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'User projects will appear here as soon as new requests are posted.',
+              style: GoogleFonts.outfit(fontSize: 13, color: Colors.black54, height: 1.4),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 18),
+            OutlinedButton.icon(
+              onPressed: () => ref.invalidate(professionalProjectsProvider),
+              icon: const Icon(LucideIcons.refreshCw, size: 16, color: AppColors.primaryRed),
+              label: Text('Refresh', style: GoogleFonts.outfit(color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.primaryRed),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoSearchResultState() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 40),
+      child: Center(
+        child: Column(
+          children: [
+            const Icon(LucideIcons.searchX, size: 34, color: Colors.black38),
+            const SizedBox(height: 10),
+            Text(
+              'No matching projects',
+              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textMain),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Try a different keyword for title, location, or service type.',
+              style: GoogleFonts.outfit(fontSize: 13, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildProjectCard({
-    required String image,
-    required String title,
-    required String price,
-    required String location,
-    required String date,
-    required String description,
+    required Project project,
   }) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const ProjectDetailsScreen()),
+          MaterialPageRoute(builder: (context) => ProjectDetailsScreen(project: project)),
         );
       },
       child: Container(
@@ -199,8 +309,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: Image.asset(
-                    image,
+                  child: Image.network(
+                    project.imageUrl ?? '',
                     height: 180,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -218,7 +328,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                     children: [
                       _buildCircleIcon(LucideIcons.heart, AppColors.primaryRed),
                       const SizedBox(height: 8),
-                      _buildCircleIcon(LucideIcons.messageCircle, Colors.black87),
+                      GestureDetector(
+                        onTap: () => _openChatWithClient(context, project),
+                        child: _buildCircleIcon(LucideIcons.messageCircle, Colors.black87),
+                      ),
                     ],
                   ),
                 ),
@@ -233,14 +346,14 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        title,
+                        project.serviceType?.isNotEmpty == true ? project.serviceType! : project.title,
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
-                        price,
+                        project.budget ?? 'N/A',
                         style: GoogleFonts.outfit(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -253,19 +366,19 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   Row(
                     children: [
                       Text(
-                        location,
+                        project.location,
                         style: GoogleFonts.outfit(fontSize: 12, color: Colors.black54),
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        date,
+                        project.date,
                         style: GoogleFonts.outfit(fontSize: 12, color: Colors.black54),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    description,
+                    project.description,
                     style: GoogleFonts.outfit(fontSize: 13, color: Colors.black54, height: 1.4),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -325,6 +438,73 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         shape: BoxShape.circle,
       ),
       child: Icon(icon, color: color, size: 18),
+    );
+  }
+
+  void _openChatWithClient(BuildContext context, Project project) {
+    final uid = project.clientUserId?.trim();
+    if (uid == null || uid.isEmpty) {
+      AppToast.info('Client information is not available for this project yet.');
+      return;
+    }
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) => ChatScreen(
+          args: ProfessionalChatArgs(
+            clientUserId: uid,
+            clientDisplayName: project.clientDisplayName,
+            projectId: project.id,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProjectsShimmer extends StatelessWidget {
+  const _ProjectsShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppShimmer(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Column(
+          children: List.generate(3, (_) => _projectCardSkeleton()),
+        ),
+      ),
+    );
+  }
+
+  Widget _projectCardSkeleton() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ShimmerBox(width: double.infinity, height: 180, radius: 0),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ShimmerBox(width: 200, height: 16, radius: 4),
+                const SizedBox(height: 10),
+                ShimmerBox(width: 140, height: 12, radius: 4),
+                const SizedBox(height: 10),
+                ShimmerBox(width: 100, height: 12, radius: 4),
+                const SizedBox(height: 14),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

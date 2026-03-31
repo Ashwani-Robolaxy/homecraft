@@ -5,6 +5,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_assets.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../domain/models/app_user.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/custom_text_field.dart';
@@ -36,21 +37,15 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     final role = (params['role'] == 'provider') ? UserRole.provider : UserRole.client;
     final password = _newPasswordController.text;
     if (password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password must be at least 6 characters'), backgroundColor: AppColors.primaryRed),
-      );
+      AppToast.error('Password must be at least 6 characters');
       return;
     }
     if (password != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match'), backgroundColor: AppColors.primaryRed),
-      );
+      AppToast.error('Passwords do not match');
       return;
     }
     if (email.isEmpty || otp.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Missing reset details. Please retry.'), backgroundColor: AppColors.primaryRed),
-      );
+      AppToast.error('Missing reset details. Please retry.');
       return;
     }
     setState(() => _isLoading = true);
@@ -63,9 +58,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: AppColors.primaryRed),
-      );
+      AppToast.error(error);
       return;
     }
     final roleValue = role == UserRole.provider ? 'provider' : 'client';

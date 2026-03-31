@@ -1,4 +1,8 @@
 {
+    "details": {
+        "title": "Détails",
+        "accepted": "Accepté({count})"
+    },
     "details_title": "Détails",
     "details_accepted": "Accepté({count})",
     "service_details": {
@@ -91,6 +95,8 @@
         "add_limit_info": "vous pouvez ajouter 2 projets/Mois",
         "remaining_count": "Projet restant {count}/2",
         "my_projects": "Mon projet",
+        "open_project_badge": "Projet ouvert",
+        "client_fallback": "Client",
         "form": {
             "title": "Nouveau projet",
             "project_title_label": "Titre du projet",

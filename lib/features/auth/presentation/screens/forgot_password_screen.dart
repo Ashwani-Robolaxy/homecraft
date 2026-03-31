@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_assets.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
 import '../../domain/models/app_user.dart';
 import '../providers/auth_provider.dart';
@@ -40,16 +41,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (errorKey != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorKey.tr()), backgroundColor: AppColors.primaryRed),
-      );
+      AppToast.error(errorKey.tr());
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('auth.forgot_password.success'.tr()),
-          backgroundColor: Colors.green,
-        ),
-      );
+      AppToast.success('auth.forgot_password.success'.tr());
       final roleValue = role == UserRole.provider ? 'provider' : 'client';
       context.push(
         '/verify-otp?email=${Uri.encodeComponent(_emailController.text.trim())}&role=$roleValue',

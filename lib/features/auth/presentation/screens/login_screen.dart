@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_assets.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
 import '../../domain/models/app_user.dart';
 import '../providers/auth_provider.dart';
@@ -52,12 +53,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (result.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.errorMessage!.tr()),
-          backgroundColor: AppColors.primaryRed,
-        ),
-      );
+      AppToast.error(result.errorMessage!.tr());
       return;
     }
     await ref.read(authStateNotifierProvider).refresh();

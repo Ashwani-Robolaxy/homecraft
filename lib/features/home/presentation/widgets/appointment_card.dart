@@ -1,19 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
-
-enum AppointmentStatus { current, accepted, complete, rejected }
+import '../../../booking/domain/models/booking.dart';
 
 class AppointmentCard extends StatefulWidget {
-  final String profImage;
-  final String profName;
-  final String clientName;
-  final AppointmentStatus status;
-  final bool initiallyExpanded;
-  final VoidCallback? onActionPressed;
+  const AppointmentCard({
+    super.key,
+    required this.booking,
+    this.isPro = false,
+    this.initiallyExpanded = false,
+    this.onCancel,
+    this.onAccept,
+    this.onReject,
+  });
 
-  const AppointmentCard({super.key, required this.profImage, required this.profName, required this.clientName, required this.status, this.initiallyExpanded = false, this.onActionPressed});
+  final Booking booking;
+  final bool isPro;
+  final bool initiallyExpanded;
+  final VoidCallback? onCancel;
+  final VoidCallback? onAccept;
+  final VoidCallback? onReject;
 
   @override
   State<AppointmentCard> createState() => _AppointmentCardState();
@@ -28,53 +36,62 @@ class _AppointmentCardState extends State<AppointmentCard> {
     _isExpanded = widget.initiallyExpanded;
   }
 
-  Color _getStatusColor() {
-    switch (widget.status) {
-      case AppointmentStatus.current:
-        return Colors.white;
-      case AppointmentStatus.accepted:
+  Color _statusColor(BookingStatus s) {
+    switch (s) {
+      case BookingStatus.pending:
+        return Colors.orange;
+      case BookingStatus.accepted:
         return const Color(0xFF0095FF);
-      case AppointmentStatus.complete:
-        return const Color(0xFF4CAF50);
-      case AppointmentStatus.rejected:
+      case BookingStatus.rejected:
         return AppColors.error;
-    }
-  }
-
-  String _getStatusText() {
-    switch (widget.status) {
-      case AppointmentStatus.current:
-        return 'Current';
-      case AppointmentStatus.accepted:
-        return 'Accepted';
-      case AppointmentStatus.complete:
-        return 'Complete';
-      case AppointmentStatus.rejected:
-        return 'Rejected';
+      case BookingStatus.cancelled:
+        return Colors.grey;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final b = widget.booking;
+    final isPro = widget.isPro;
+
+    // Name and photo shown depend on perspective
+    final displayName = isPro ? (b.clientName ?? 'Client') : b.professionalName;
+    final displayPhoto = isPro ? b.clientPhoto : b.professionalPhoto;
+    final displaySub = isPro ? 'Client' : (b.professionalProfession ?? 'Professional');
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: Column(
         children: [
+          // ── Header Row ────────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 80,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    image: DecorationImage(image: AssetImage(widget.profImage), fit: BoxFit.cover),
+                // Avatar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 72,
+                    height: 56,
+                    child: (displayPhoto != null &&
+                            displayPhoto.startsWith('http'))
+                        ? Image.network(displayPhoto,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                _avatarPlaceholder(displayName))
+                        : _avatarPlaceholder(displayName),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -83,83 +100,198 @@ class _AppointmentCardState extends State<AppointmentCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.profName,
-                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textMain),
+                        displayName,
+                        style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMain),
                       ),
-                      Text(widget.clientName, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary)),
+                      Text(displaySub,
+                          style: GoogleFonts.outfit(
+                              fontSize: 13, color: AppColors.textSecondary)),
                       const SizedBox(height: 4),
+                      // Status badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 2),
                         decoration: BoxDecoration(
-                          color: widget.status == AppointmentStatus.current ? Colors.white : _getStatusColor(),
+                          color: b.status == BookingStatus.pending
+                              ? Colors.transparent
+                              : _statusColor(b.status),
                           borderRadius: BorderRadius.circular(20),
-                          border: widget.status == AppointmentStatus.current ? Border.all(color: AppColors.primaryRed) : null,
+                          border: b.status == BookingStatus.pending
+                              ? Border.all(color: Colors.orange)
+                              : null,
                         ),
                         child: Text(
-                          _getStatusText(),
-                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w500, color: widget.status == AppointmentStatus.current ? AppColors.primaryRed : Colors.white),
+                          b.status.label,
+                          style: GoogleFonts.outfit(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: b.status == BookingStatus.pending
+                                ? Colors.orange
+                                : Colors.white,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: Colors.grey[100], shape: BoxShape.circle),
-                  child: const Icon(Icons.chat_bubble, color: Color(0xFF7A0000), size: 20),
                 ),
               ],
             ),
           ),
           const Divider(height: 1, thickness: 1, color: Color(0xFFF5F5F5)),
+          // ── Expand Toggle ─────────────────────────────────────────────────
           InkWell(
             onTap: () => setState(() => _isExpanded = !_isExpanded),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Icon(_isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: AppColors.textMain),
+              child: Icon(
+                _isExpanded
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+                color: AppColors.textMain,
+              ),
             ),
           ),
-          if (_isExpanded) ...[
+          // ── Expanded Content ──────────────────────────────────────────────
+          if (_isExpanded)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text('Date & Time  ', style: GoogleFonts.outfit(color: AppColors.textSecondary)),
-                      Expanded(
-                        child: Text('Dec 23,2025  10:00-12:00 AM', style: GoogleFonts.outfit(fontWeight: FontWeight.w500)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Text('Location       ', style: GoogleFonts.outfit(color: AppColors.textSecondary)),
-                      Expanded(
-                        child: Text('267 New Avenue Park.', style: GoogleFonts.outfit(fontWeight: FontWeight.w500)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    height: 120,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      image: const DecorationImage(image: AssetImage('assets/images/map_placeholder.png'), fit: BoxFit.cover),
+                  if (b.scheduledDate != null) ...[
+                    _InfoRow(
+                      label: 'Date',
+                      value: DateFormat('EEE, MMM d, yyyy').format(b.scheduledDate!),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  PrimaryGradientButton(text: widget.status == AppointmentStatus.complete ? 'Review Now' : 'Cancel Booking', height: 40, onPressed: widget.onActionPressed ?? () {}),
+                    const SizedBox(height: 6),
+                  ],
+                  if (b.slotStart != null || b.slotEnd != null) ...[
+                    _InfoRow(
+                      label: 'Time',
+                      value: [
+                        if (b.slotStart != null) b.slotStart!,
+                        if (b.slotEnd != null) b.slotEnd!,
+                      ].join(' – '),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                  if (b.location != null && b.location!.isNotEmpty) ...[
+                    _InfoRow(label: 'Location', value: b.location!),
+                    const SizedBox(height: 6),
+                  ],
+                  if (b.notes != null && b.notes!.isNotEmpty) ...[
+                    _InfoRow(label: 'Notes', value: b.notes!),
+                    const SizedBox(height: 6),
+                  ],
+                  const SizedBox(height: 14),
+                  // ── Actions ───────────────────────────────────────────────
+                  if (isPro && b.status == BookingStatus.pending) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: OutlinedButton(
+                              onPressed: widget.onReject,
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(
+                                    color: AppColors.primaryRed),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(22)),
+                              ),
+                              child: Text(
+                                'Reject',
+                                style: GoogleFonts.outfit(
+                                    color: AppColors.primaryRed,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: PrimaryGradientButton(
+                            text: 'Accept',
+                            height: 44,
+                            onPressed: widget.onAccept ?? () {},
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else if (!isPro &&
+                      (b.status == BookingStatus.pending ||
+                          b.status == BookingStatus.accepted)) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: SizedBox(
+                        height: 44,
+                        child: OutlinedButton(
+                          onPressed: widget.onCancel,
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.primaryRed),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(22)),
+                          ),
+                          child: Text(
+                            'Cancel Booking',
+                            style: GoogleFonts.outfit(
+                                color: AppColors.primaryRed,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-          ],
         ],
       ),
+    );
+  }
+
+  Widget _avatarPlaceholder(String name) {
+    return Container(
+      color: AppColors.primaryRed.withValues(alpha: 0.1),
+      alignment: Alignment.center,
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : '?',
+        style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: AppColors.primaryRed),
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 72,
+          child: Text(label,
+              style: GoogleFonts.outfit(
+                  fontSize: 13, color: AppColors.textSecondary)),
+        ),
+        Expanded(
+          child: Text(value,
+              style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textMain)),
+        ),
+      ],
     );
   }
 }
