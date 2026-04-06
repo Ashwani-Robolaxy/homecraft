@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_state_notifier.dart';
+import '../network/api_client.dart';
 import '../services/app_toast.dart';
+import '../storage/session_storage.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/onboarding/presentation/screens/splash_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
@@ -52,6 +54,16 @@ import '../../features/booking/presentation/screens/create_booking_screen.dart';
 const _publicPaths = ['/splash', '/onboarding', '/login', '/register', '/forgot-password', '/terms', '/privacy', '/verify-otp', '/reset-password'];
 
 GoRouter _createRouter(AuthStateNotifier authNotifier) {
+  // Wire the 401 / expired-token handler once per router instance.
+  ApiClient.onUnauthorized = () async {
+    await SessionStorage().clear();
+    AppToast.error('Your session has expired. Please log in again.');
+    final ctx = AppToast.navigatorKey.currentContext;
+    if (ctx != null && ctx.mounted) {
+      GoRouter.of(ctx).go('/login');
+    }
+  };
+
   return GoRouter(
     navigatorKey: AppToast.navigatorKey,
     refreshListenable: authNotifier,
@@ -91,8 +103,12 @@ final List<RouteBase> _routes = [
     GoRoute(
       path: '/project-details',
       builder: (context, state) {
-        final project = state.extra as Project;
-        return ProjectDetailsScreen(project: project);
+        final extra = state.extra;
+        if (extra is ({Project project, int bookingId})) {
+          return ProjectDetailsScreen(
+              project: extra.project, bookingId: extra.bookingId);
+        }
+        return ProjectDetailsScreen(project: extra as Project);
       },
     ),
     GoRoute(path: '/service-details', builder: (context, state) => const ServiceDetailsScreen()),

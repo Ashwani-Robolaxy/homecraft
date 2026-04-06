@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../subscription/data/subscription_remote_datasource.dart';
+import '../../../subscription/domain/subscription_data.dart';
 import '../widgets/profile_hero_header.dart';
 
 class ProviderProfileScreen extends ConsumerStatefulWidget {
@@ -18,6 +20,25 @@ class ProviderProfileScreen extends ConsumerStatefulWidget {
 class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
   static const double _expandedBody = 248;
   final ValueNotifier<double> _headerExpandT = ValueNotifier(1.0);
+
+  final _subDs = SubscriptionRemoteDatasource();
+  SubscriptionContext? _subCtx;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubscription();
+  }
+
+  Future<void> _loadSubscription() async {
+    try {
+      final ctx = await _subDs.fetchContext();
+      if (!mounted) return;
+      setState(() => _subCtx = ctx);
+    } catch (_) {
+      // Non-fatal — UI falls back to defaults
+    }
+  }
 
   @override
   void dispose() {
@@ -41,6 +62,8 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
     final displayName = user?.displayName ?? '';
     final top = MediaQuery.paddingOf(context).top;
     final expandedHeight = _expandedBody + top;
+    final verificationStatus =
+        _subCtx?.subscriptionState.verificationStatus ?? '';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -101,6 +124,7 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
                   displayName: displayName,
                   expandT: t,
                   emptyNameFallback: 'Provider',
+                  verificationStatus: verificationStatus,
                 );
               },
             ),
@@ -108,7 +132,13 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-              child: _buildMenuSection(context, ref),
+              child: Column(
+                children: [
+                  _SubscriptionCard(preloaded: _subCtx),
+                  const SizedBox(height: 16),
+                  _buildMenuSection(context, ref),
+                ],
+              ),
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -185,5 +215,273 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
       trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
+  }
+}
+
+// ── Subscription status card ──────────────────────────────────────────────────
+
+class _SubscriptionCard extends StatefulWidget {
+  const _SubscriptionCard({this.preloaded});
+
+  /// If the parent already fetched the context, pass it here to skip a
+  /// redundant network call. The card still shows while preloaded is null.
+  final SubscriptionContext? preloaded;
+
+  @override
+  State<_SubscriptionCard> createState() => _SubscriptionCardState();
+}
+
+class _SubscriptionCardState extends State<_SubscriptionCard> {
+  final _ds = SubscriptionRemoteDatasource();
+  SubscriptionContext? _ctx;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.preloaded != null) {
+      _ctx = widget.preloaded;
+      _loading = false;
+    } else {
+      _load();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_SubscriptionCard old) {
+    super.didUpdateWidget(old);
+    if (widget.preloaded != null && widget.preloaded != old.preloaded) {
+      setState(() { _ctx = widget.preloaded; _loading = false; });
+    }
+  }
+
+  Future<void> _load() async {
+    try {
+      final ctx = await _ds.fetchContext();
+      if (!mounted) return;
+      setState(() { _ctx = ctx; _loading = false; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const SizedBox.shrink();
+    final ctx = _ctx;
+    if (ctx == null) return const SizedBox.shrink();
+
+    final sub = ctx.subscriptionState;
+    final pricing = ctx.pricing;
+    final endsAt = ctx.subscriptionEndsAt;
+
+    // Don't show card if no subscription info available
+    if (sub.status == 'none' && !sub.promoEligible && !sub.trialStartsAfterVerification) {
+      return const SizedBox.shrink();
+    }
+
+    return GestureDetector(
+      onTap: () => context.push('/subscription-plans'),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: _gradientColors(sub.status),
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryRed.withOpacity(0.2),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Icon
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(_statusIcon(sub.status), color: Colors.white, size: 22),
+            ),
+            const SizedBox(width: 14),
+
+            // Text info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _statusTitle(sub),
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _statusSubtitle(sub, pricing, endsAt),
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.85),
+                      height: 1.4,
+                    ),
+                  ),
+                  // ── End-date chip ────────────────────────────────────
+                  if (_endDateLine(sub, endsAt) != null) ...[
+                    const SizedBox(height: 7),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(LucideIcons.calendarClock,
+                              color: Colors.white.withOpacity(0.9), size: 12),
+                          const SizedBox(width: 5),
+                          Text(
+                            _endDateLine(sub, endsAt)!,
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 10),
+
+            // Status badge + chevron
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    _badgeLabel(sub),
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Icon(LucideIcons.chevronRight,
+                    color: Colors.white.withOpacity(0.7), size: 16),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  static String _fmt(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  /// Returns the text for the end-date chip, or null if not applicable.
+  String? _endDateLine(SubscriptionState sub, DateTime? stripeEnd) {
+    if (sub.status == 'active' && stripeEnd != null) {
+      return 'Renews ${_fmt(stripeEnd)}';
+    }
+    if (sub.status == 'trial' && sub.trialEndsAt != null) {
+      return 'Trial ends ${_fmt(sub.trialEndsAt!)}';
+    }
+    return null;
+  }
+
+  List<Color> _gradientColors(String status) {
+    switch (status) {
+      case 'active':
+        return [const Color(0xFF1B6B2F), const Color(0xFF2E8B47)];
+      case 'trial':
+        return [const Color(0xFF6B1A1A), AppColors.primaryRed];
+      case 'lapsed':
+        return [const Color(0xFF555555), const Color(0xFF777777)];
+      default:
+        return [const Color(0xFF4A0000), AppColors.primaryRed];
+    }
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'active': return LucideIcons.checkCircle;
+      case 'trial':  return LucideIcons.clock;
+      case 'lapsed': return LucideIcons.alertCircle;
+      default:       return LucideIcons.crown;
+    }
+  }
+
+  String _statusTitle(SubscriptionState sub) {
+    switch (sub.status) {
+      case 'active': return 'Premium Active';
+      case 'trial':
+        return sub.trialActive
+            ? 'Free Trial — ${sub.trialDaysRemaining} day${sub.trialDaysRemaining == 1 ? '' : 's'} left'
+            : 'Trial Period';
+      case 'lapsed': return 'Subscription Lapsed';
+      default:
+        return sub.trialStartsAfterVerification
+            ? 'Trial Starts After Verification'
+            : 'No Active Subscription';
+    }
+  }
+
+  String _statusSubtitle(SubscriptionState sub, SubscriptionPricing pricing, DateTime? stripeEnd) {
+    switch (sub.status) {
+      case 'active':
+        return 'All features unlocked.';
+      case 'trial':
+        return '${pricing.trialDays}-day free trial · Tap to subscribe';
+      case 'lapsed':
+        return 'Renew to restore full access.';
+      default:
+        if (sub.trialStartsAfterVerification) {
+          return 'Complete verification to start your ${pricing.trialDays}-day free trial.';
+        }
+        if (sub.promoEligible) {
+          return 'Start your ${pricing.trialDays}-day free trial.';
+        }
+        return 'Tap to view available plans.';
+    }
+  }
+
+  String _badgeLabel(SubscriptionState sub) {
+    switch (sub.status) {
+      case 'active': return 'ACTIVE';
+      case 'trial':  return 'TRIAL';
+      case 'lapsed': return 'LAPSED';
+      default:       return 'FREE';
+    }
   }
 }

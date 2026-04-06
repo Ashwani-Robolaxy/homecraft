@@ -93,7 +93,7 @@ class _CalendarManagementScreenState extends State<CalendarManagementScreen> {
   Future<void> _acceptBooking(Booking b) async {
     setState(() => _bookingBusy = true);
     try {
-      await _bookingDs.acceptBooking(b.id);
+      await _bookingDs.updateBookingStatus(b.id, 'accepted');
       AppToast.success('Booking accepted.');
       await _loadBookings();
     } catch (e) {
@@ -106,7 +106,7 @@ class _CalendarManagementScreenState extends State<CalendarManagementScreen> {
   Future<void> _rejectBooking(Booking b) async {
     setState(() => _bookingBusy = true);
     try {
-      await _bookingDs.rejectBooking(b.id);
+      await _bookingDs.updateBookingStatus(b.id, 'rejected');
       AppToast.success('Booking rejected.');
       await _loadBookings();
     } catch (e) {

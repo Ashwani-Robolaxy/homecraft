@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/network/token_utils.dart';
 import '../../../../core/storage/session_storage.dart';
 import '../../domain/models/app_user.dart';
 import '../../domain/models/provider_profile.dart';
@@ -25,11 +26,22 @@ class AuthRemoteDatasource {
   Future<void> _bootstrapSession() async {
     final token = await _session.getToken();
     final user = await _session.getUser();
-    if (token == null || user == null) {
+
+    // No stored session — not logged in.
+    if (token == null || token.isEmpty || user == null) {
       _currentUser = null;
       _controller.add(null);
       return;
     }
+
+    // Token is expired — wipe session so GoRouter redirects to /login.
+    if (TokenUtils.isExpired(token)) {
+      await _session.clear();
+      _currentUser = null;
+      _controller.add(null);
+      return;
+    }
+
     _currentUser = user;
     _controller.add(user);
   }

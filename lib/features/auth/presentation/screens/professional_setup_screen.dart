@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -272,7 +276,7 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
               const SizedBox(height: 12),
               _buildTextField(controller: _phoneController, hint: 'Phone No.', icon: LucideIcons.phone),
               const SizedBox(height: 12),
-              _buildTextField(controller: _addressController, hint: 'Address', icon: LucideIcons.mapPin),
+              _GooglePlacesField(controller: _addressController, hint: 'Address'),
               const SizedBox(height: 12),
               _buildDescriptionField(),
 
@@ -289,7 +293,7 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
               _buildTextField(controller: _contactMailController, hint: 'Contact email'),
               const SizedBox(height: 12),
               _buildLabel('Address*'),
-              _buildTextField(controller: _companyAddressController, hint: 'Address', icon: LucideIcons.mapPin),
+              _GooglePlacesField(controller: _companyAddressController, hint: 'Address'),
               const SizedBox(height: 12),
               _buildLabel('Postal Code'),
               _buildTextField(controller: _postalCodeController, hint: 'Postal code'),
@@ -644,6 +648,228 @@ class _ProfessionalSetupScreenState extends ConsumerState<ProfessionalSetupScree
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Reusable Google Places autocomplete field ─────────────────────────────────
+
+class _GooglePlacesField extends StatefulWidget {
+  const _GooglePlacesField({required this.controller, this.hint = 'Address'});
+
+  final TextEditingController controller;
+  final String hint;
+
+  @override
+  State<_GooglePlacesField> createState() => _GooglePlacesFieldState();
+}
+
+class _GooglePlacesFieldState extends State<_GooglePlacesField> {
+  static const _apiKey = 'AIzaSyDmS2dadlo4YW7AR4iDlKcJtNGRc-mnTSA';
+
+  final _layerLink = LayerLink();
+  final GlobalKey _fieldKey = GlobalKey();
+  final String _sessionToken =
+      DateTime.now().millisecondsSinceEpoch.toString();
+
+  Timer? _debounce;
+  OverlayEntry? _overlay;
+  List<String> _suggestions = const [];
+  bool _loading = false;
+  bool _suppress = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _removeOverlay();
+    widget.controller.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (_suppress) return;
+    _debounce?.cancel();
+    final text = widget.controller.text.trim();
+    if (text.length < 2) {
+      _clearSuggestions();
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 350), () => _fetch(text));
+  }
+
+  Future<void> _fetch(String input) async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    try {
+      final uri = Uri.https('maps.googleapis.com', '/maps/api/place/autocomplete/json', {
+        'input': input,
+        'types': 'geocode',
+        'language': 'en',
+        'sessiontoken': _sessionToken,
+        'key': _apiKey,
+      });
+      final res = await http.get(uri);
+      if (!mounted) return;
+      final map = res.body.isEmpty ? <String, dynamic>{} : jsonDecode(res.body) as Map<String, dynamic>;
+      final status = (map['status'] ?? '').toString();
+      if (status != 'OK' && status != 'ZERO_RESULTS') {
+        _clearSuggestions();
+        return;
+      }
+      final predictions = map['predictions'];
+      if (predictions is! List) { _clearSuggestions(); return; }
+      final results = predictions
+          .whereType<Map>()
+          .map((e) => (e['description'] ?? '').toString())
+          .where((d) => d.isNotEmpty)
+          .toList();
+      if (!mounted) return;
+      setState(() { _loading = false; _suggestions = results; });
+      _showOverlay();
+    } catch (_) {
+      if (mounted) _clearSuggestions();
+    }
+  }
+
+  void _clearSuggestions() {
+    if (!mounted) return;
+    setState(() { _loading = false; _suggestions = const []; });
+    _removeOverlay();
+  }
+
+  void _select(String place) {
+    _suppress = true;
+    widget.controller.text = place;
+    widget.controller.selection =
+        TextSelection.fromPosition(TextPosition(offset: place.length));
+    _clearSuggestions();
+    FocusScope.of(context).unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _suppress = false);
+  }
+
+  void _showOverlay() {
+    if (_suggestions.isEmpty) { _removeOverlay(); return; }
+    if (_overlay != null) { _overlay!.markNeedsBuild(); return; }
+    _overlay = OverlayEntry(builder: (_) => _buildOverlay());
+    Overlay.of(context, rootOverlay: true).insert(_overlay!);
+  }
+
+  void _removeOverlay() {
+    _overlay?.remove();
+    _overlay = null;
+  }
+
+  Widget _buildOverlay() {
+    final box = _fieldKey.currentContext?.findRenderObject() as RenderBox?;
+    final width = box?.size.width ?? 300;
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _clearSuggestions,
+          ),
+          CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            targetAnchor: Alignment.bottomLeft,
+            followerAnchor: Alignment.topLeft,
+            offset: const Offset(0, 4),
+            child: Material(
+              elevation: 14,
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.white,
+              shadowColor: Colors.black12,
+              child: SizedBox(
+                width: width,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    shrinkWrap: true,
+                    itemCount: _suggestions.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, indent: 44),
+                    itemBuilder: (_, i) {
+                      final s = _suggestions[i];
+                      return ListTile(
+                        dense: true,
+                        leading: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryRed.withOpacity(0.09),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(LucideIcons.mapPin,
+                              size: 14, color: AppColors.primaryRed),
+                        ),
+                        title: Text(
+                          s,
+                          style: GoogleFonts.outfit(
+                              fontSize: 13, color: Colors.black87),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => _select(s),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextFormField(
+        key: _fieldKey,
+        controller: widget.controller,
+        decoration: InputDecoration(
+          hintText: widget.hint,
+          hintStyle:
+              GoogleFonts.outfit(color: Colors.black26, fontSize: 14),
+          prefixIcon:
+              const Icon(LucideIcons.mapPin, color: AppColors.primaryRed, size: 20),
+          suffixIcon: _loading
+              ? const Padding(
+                  padding: EdgeInsets.all(13),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: AppColors.primaryRed),
+                  ),
+                )
+              : null,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide:
+                BorderSide(color: AppColors.primaryRed.withOpacity(0.1)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide:
+                const BorderSide(color: AppColors.primaryRed, width: 1),
+          ),
+          filled: true,
+          fillColor: const Color(0xFFFCFCFC),
+        ),
+      ),
     );
   }
 }

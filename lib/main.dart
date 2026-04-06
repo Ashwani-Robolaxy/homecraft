@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 import 'core/router/app_router.dart' show appRouterProvider;
 import 'core/theme/app_theme.dart';
@@ -11,6 +12,12 @@ import 'core/services/app_toast.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EasyLocalization.ensureInitialized();
+
+  // Stripe: publishable key is set dynamically per-payment from the server.
+  // We set a placeholder here so the SDK initialises; it's always overridden
+  // by StripePaymentService before presenting the sheet.
+  Stripe.publishableKey = 'pk_test_placeholder';
+  await Stripe.instance.applySettings();
 
   runApp(
     ProviderScope(
