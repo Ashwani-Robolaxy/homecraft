@@ -41,7 +41,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (errorKey != null) {
-      AppToast.error(errorKey.tr());
+      AppToast.error(errorKey);
     } else {
       AppToast.success('auth.forgot_password.success'.tr());
       final roleValue = role == UserRole.provider ? 'provider' : 'client';
@@ -57,21 +57,26 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       backgroundColor: AppColors.backgroundWhite,
       body: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-              child: Row(
-                children: [
-                  IconButton(icon: const Icon(LucideIcons.chevronLeft, color: AppColors.textMain), onPressed: () => context.pop()),
-                  const Spacer(),
-                  Image.asset(
-                    AppAssets.logoHorizontalRed,
-                    height: 40,
-                    errorBuilder: (context, error, stackTrace) => const Text('HomeCraft', style: TextStyle(fontFamily: 'Playfair Display', fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primaryRed)),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 48),
-                ],
+              padding: const EdgeInsets.fromLTRB(4, 8, 8, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  icon: const Icon(LucideIcons.chevronLeft, color: AppColors.textMain),
+                  onPressed: () => context.pop(),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 20),
+              child: Center(
+                child: Image.asset(
+                  AppAssets.logoRed,
+                  height: 82,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
             Expanded(
@@ -90,6 +95,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       ),
                       child: Form(
                         key: _formKey,
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         child: Column(
                           children: [
                             Text(tr('auth.forgot_password.title'), style: const TextStyle(fontFamily: 'Playfair Display', fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF7A0000))),

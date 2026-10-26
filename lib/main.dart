@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
@@ -8,10 +12,20 @@ import 'core/router/app_router.dart' show appRouterProvider;
 import 'core/theme/app_theme.dart';
 import 'core/constants/app_assets.dart';
 import 'core/services/app_toast.dart';
+import 'core/services/firebase_messaging_background.dart';
+import 'core/services/push_notification_service.dart';
+import 'core/storage/notification_preferences.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EasyLocalization.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await NotificationPreferences.load();
+  await _bootstrapFirebaseMessaging();
+  await PushNotificationService.instance.initialize();
 
   // Stripe: publishable key is set dynamically per-payment from the server.
   // We set a placeholder here so the SDK initialises; it's always overridden
@@ -21,9 +35,38 @@ void main() async {
 
   runApp(
     ProviderScope(
-      child: EasyLocalization(supportedLocales: const [Locale('en'), Locale('fr')], path: AppAssets.translationsPath, fallbackLocale: const Locale('en'), child: const MyApp()),
+      child: EasyLocalization(
+        supportedLocales: const [Locale('en'), Locale('fr')],
+        path: AppAssets.translationsPath,
+        fallbackLocale: const Locale('en'),
+        startLocale: const Locale('en'),
+        saveLocale: true,
+        child: const MyApp(),
+      ),
     ),
   );
+}
+
+Future<void> _bootstrapFirebaseMessaging() async {
+  try {
+    final messaging = FirebaseMessaging.instance;
+    await messaging.requestPermission(alert: true, badge: true, sound: true, provisional: false);
+    if (Platform.isIOS) {
+      String? apnsToken = await messaging.getAPNSToken();
+      if (apnsToken == null) {
+        for (int i = 0; i < 6; i++) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          apnsToken = await messaging.getAPNSToken();
+          if (apnsToken != null) break;
+        }
+      }
+    }
+    // Prime token generation early so auth requests can attach it.
+    final token = await messaging.getToken();
+    debugPrint('[FirebaseMessaging] Bootstrapped FCM token: $token');
+  } catch (e) {
+    debugPrint('[FirebaseMessaging] Bootstrap error: $e');
+  }
 }
 
 class MyApp extends ConsumerWidget {

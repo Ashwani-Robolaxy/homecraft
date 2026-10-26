@@ -1,171 +1,312 @@
+import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/app_shimmer.dart';
-import '../../../booking/data/booking_remote_datasource.dart';
-import '../../../booking/domain/models/booking.dart';
-import '../../../chat/presentation/professional_chat_args.dart';
+import '../../../../core/widgets/primary_gradient_button.dart';
+import '../../../../core/widgets/project_image_placeholder.dart';
 import '../../../projects/domain/models/project.dart';
+import '../../../projects/domain/models/project_category.dart';
+import '../../../projects/presentation/providers/project_provider.dart';
+import '../../../projects/presentation/widgets/project_favorite_button.dart';
+import '../../../../core/storage/session_storage.dart';
 
-class ProviderHomeScreen extends StatefulWidget {
+class ProviderHomeScreen extends ConsumerStatefulWidget {
   const ProviderHomeScreen({super.key});
 
   @override
-  State<ProviderHomeScreen> createState() => _ProviderHomeScreenState();
+  ConsumerState<ProviderHomeScreen> createState() => _ProviderHomeScreenState();
 }
 
-class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
-  final _bookingDs = BookingRemoteDatasource();
-
-  bool _isSearchActive = false;
-  late ScrollController _dateScrollController;
+class _ProviderHomeScreenState extends ConsumerState<ProviderHomeScreen> {
   late ScrollController _mainScrollController;
-  double _scrollProgress = 0.0;
   double _headerCollapse = 0.0;
 
-  List<Booking> _bookings = [];
-  bool _bookingsLoading = true;
-  String? _bookingsError;
+  List<Project> _projects = [];
+  bool _projectsLoading = true;
+  String? _projectsError;
+
+  int? _selectedCategoryId;
+  List<ProjectCategory> _categories = [];
 
   @override
   void initState() {
     super.initState();
-    _dateScrollController = ScrollController();
     _mainScrollController = ScrollController();
     _mainScrollController.addListener(() {
       const maxCollapseDistance = 180.0;
-      final value =
-          (_mainScrollController.offset / maxCollapseDistance).clamp(0.0, 1.0);
+      final value = (_mainScrollController.offset / maxCollapseDistance).clamp(0.0, 1.0);
       if (value != _headerCollapse) setState(() => _headerCollapse = value);
     });
-    _dateScrollController.addListener(() {
-      if (_dateScrollController.hasClients &&
-          _dateScrollController.position.maxScrollExtent > 0) {
-        setState(() {
-          _scrollProgress = (_dateScrollController.offset /
-                  _dateScrollController.position.maxScrollExtent)
-              .clamp(0.0, 1.0);
-        });
-      }
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPendingBookings());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadSavedCategoryAndProjects());
   }
 
   @override
   void dispose() {
-    _dateScrollController.dispose();
     _mainScrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadPendingBookings() async {
-    setState(() { _bookingsLoading = true; _bookingsError = null; });
+  Future<void> _loadSavedCategoryAndProjects() async {
     try {
-      final bookings = await _bookingDs.fetchProfessionalBookings(status: 'pending');
+      final savedId = await SessionStorage().getPreferredHomeCategoryId();
+      _selectedCategoryId = savedId;
+      final cats = await ref.read(projectRepositoryProvider).getCategories();
+      if (mounted) {
+        setState(() {
+          _categories = cats;
+        });
+      }
+    } catch (_) {}
+    await _loadRecommendedProjects();
+  }
+
+  Future<void> _loadRecommendedProjects() async {
+    setState(() {
+      _projectsLoading = true;
+      _projectsError = null;
+    });
+    try {
+      final repo = ref.read(projectRepositoryProvider);
+      final list = await repo.getProfessionalProjects(limit: 50, categoryId: _selectedCategoryId);
       if (!mounted) return;
       setState(() {
-        _bookings = bookings;
-        _bookingsLoading = false;
+        _projects = list;
+        _projectsLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
-      final msg = e.toString()
-          .replaceFirst('Exception: ', '')
-          .replaceFirst('ApiException: ', '');
+      final msg = e.toString().replaceFirst('Exception: ', '').replaceFirst('ApiException: ', '');
       setState(() {
-        _bookingsLoading = false;
-        _bookingsError = msg;
+        _projectsLoading = false;
+        _projectsError = msg;
       });
     }
+  }
+
+  Future<void> _updateCategoryFilter(int? categoryId) async {
+    setState(() {
+      _selectedCategoryId = categoryId;
+    });
+    await SessionStorage().setPreferredHomeCategoryId(categoryId);
+    await _loadRecommendedProjects();
+  }
+
+  Widget _buildCategoryVisual(ProjectCategory category, {double size = 20}) {
+    final imageUrl = category.imageUrl?.trim();
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(size / 2),
+        child: Image.network(
+          imageUrl,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const Icon(LucideIcons.layoutGrid, size: 20, color: AppColors.primaryRed),
+        ),
+      );
+    }
+    return const Icon(LucideIcons.layoutGrid, size: 20, color: AppColors.primaryRed);
+  }
+
+  Widget _buildCategoryLeading(ProjectCategory category, {double size = 36}) {
+    final imageUrl = category.imageUrl?.trim();
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          imageUrl,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(color: AppColors.primaryRed.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: Icon(LucideIcons.layoutGrid, size: size * 0.5, color: AppColors.primaryRed),
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: AppColors.primaryRed.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+      child: Icon(LucideIcons.layoutGrid, size: size * 0.5, color: AppColors.primaryRed),
+    );
+  }
+
+  Widget _buildFilterButton() {
+    final activeCategory = _categories.firstWhere(
+      (c) => c.id == _selectedCategoryId,
+      orElse: () => const ProjectCategory(id: -1, name: '', slug: ''),
+    );
+    final hasActiveFilter = _selectedCategoryId != null && activeCategory.id != -1;
+
+    return InkWell(
+      onTap: _showCategoryFilterPicker,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: hasActiveFilter ? AppColors.primaryRed.withValues(alpha: 0.1) : Colors.grey.shade100,
+          border: Border.all(color: hasActiveFilter ? AppColors.primaryRed : Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.slidersHorizontal, size: 14, color: hasActiveFilter ? AppColors.primaryRed : AppColors.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              hasActiveFilter ? activeCategory.name : 'common.search'.tr(),
+              style: GoogleFonts.outfit(fontSize: 12, fontWeight: hasActiveFilter ? FontWeight.bold : FontWeight.normal, color: hasActiveFilter ? AppColors.primaryRed : AppColors.textMain),
+            ),
+            if (hasActiveFilter) ...[
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () {
+                  _updateCategoryFilter(null);
+                },
+                child: const Icon(LucideIcons.x, size: 14, color: AppColors.primaryRed),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCategoryFilterPicker() {
+    if (_categories.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              ),
+              Text(
+                'provider.projects.filter_category'.tr(),
+                style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textMain),
+              ),
+              const SizedBox(height: 10),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    ListTile(
+                      onTap: () {
+                        _updateCategoryFilter(null);
+                        Navigator.pop(context);
+                      },
+                      leading: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(color: AppColors.primaryRed.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(LucideIcons.layoutGrid, size: 18, color: AppColors.primaryRed),
+                      ),
+                      title: Text(
+                        'provider.projects.all_categories'.tr(),
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: _selectedCategoryId == null ? FontWeight.bold : FontWeight.normal, color: AppColors.textMain),
+                      ),
+                      trailing: _selectedCategoryId == null ? const Icon(LucideIcons.check, color: AppColors.primaryRed, size: 20) : null,
+                    ),
+                    ..._categories.map((cat) {
+                      final isSelected = _selectedCategoryId == cat.id;
+                      return ListTile(
+                        onTap: () {
+                          _updateCategoryFilter(cat.id);
+                          Navigator.pop(context);
+                        },
+                        leading: _buildCategoryLeading(cat),
+                        title: Text(
+                          cat.name,
+                          style: GoogleFonts.outfit(fontSize: 16, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: AppColors.textMain),
+                        ),
+                        trailing: isSelected ? const Icon(LucideIcons.check, color: AppColors.primaryRed, size: 20) : null,
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          CustomScrollView(
-            controller: _mainScrollController,
-            slivers: [
-              SliverAppBar(
-                pinned: true,
-                stretch: true,
-                expandedHeight: 380,
-                backgroundColor: Colors.white,
-                toolbarHeight: 72,
-                titleSpacing: 0,
-                title: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 180),
-                  opacity: _headerCollapse > 0.5 ? 1 : 0,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _buildSearchField(compact: true),
-                  ),
-                ),
-                flexibleSpace:
-                    FlexibleSpaceBar(background: _buildSliverHeader(context)),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      body: CustomScrollView(
+        controller: _mainScrollController,
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            stretch: true,
+            expandedHeight: 380,
+            backgroundColor: Colors.white,
+            toolbarHeight: 72,
+            titleSpacing: 0,
+            title: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: _headerCollapse > 0.5 ? 1 : 0,
+              child: Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: _buildSearchField(compact: true)),
+            ),
+            flexibleSpace: FlexibleSpaceBar(background: _buildSliverHeader(context)),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Section header ───────────────────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // ── Section header ───────────────────────────────────
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Pending Requests',
-                                style: GoogleFonts.outfit(
-                                    fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                              if (!_bookingsLoading && _bookings.isNotEmpty)
-                                Text(
-                                  '${_bookings.length} awaiting your response',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 12,
-                                      color: AppColors.primaryRed,
-                                      fontWeight: FontWeight.w500),
-                                ),
-                            ],
-                          ),
-                        ],
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [Text('provider.home.recommendations'.tr(), style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold))],
                       ),
-                      const SizedBox(height: 16),
-
-                      // ── Content ──────────────────────────────────────────
-                      if (_bookingsLoading)
-                        _buildShimmer()
-                      else if (_bookingsError != null)
-                        _buildError()
-                      else if (_bookings.isEmpty)
-                        _buildEmpty()
-                      else
-                        ..._bookings.map((b) => Padding(
-                              padding: const EdgeInsets.only(bottom: 20),
-                              child: _BookingRequestCard(
-                                booking: b,
-                                onDismiss: () => setState(() => _bookings.remove(b)),
-                              ),
-                            )),
+                      _buildFilterButton(),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 16),
+
+                  // ── Content ──────────────────────────────────────────
+                  if (_projectsLoading)
+                    _buildShimmer()
+                  else if (_projectsError != null)
+                    _buildError()
+                  else if (_projects.isEmpty)
+                    _buildEmpty()
+                  else
+                    ..._projects.map((p) => Padding(padding: const EdgeInsets.only(bottom: 20), child: _buildProjectCard(p))),
+                ],
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
-            ],
+            ),
           ),
-          if (_isSearchActive) _buildSearchOverlay(context),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );
@@ -208,15 +349,15 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
             const Icon(LucideIcons.wifiOff, size: 40, color: Colors.black26),
             const SizedBox(height: 12),
             Text(
-              _bookingsError ?? 'Could not load booking requests.',
+              _projectsError ?? 'Could not load recommended projects.',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(fontSize: 13, color: Colors.black45, height: 1.4),
             ),
             const SizedBox(height: 12),
             TextButton.icon(
-              onPressed: _loadPendingBookings,
+              onPressed: _loadRecommendedProjects,
               icon: const Icon(LucideIcons.refreshCw, size: 16),
-              label: const Text('Retry'),
+              label: Text('common.retry'.tr()),
               style: TextButton.styleFrom(foregroundColor: AppColors.primaryRed),
             ),
           ],
@@ -235,7 +376,7 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
             const Icon(LucideIcons.clipboardList, size: 48, color: Colors.black12),
             const SizedBox(height: 12),
             Text(
-              'No pending booking requests.\nCheck back later!',
+              'No recommended projects available. Check back later!',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(fontSize: 13, color: Colors.black45, height: 1.5),
             ),
@@ -245,20 +386,15 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
     );
   }
 
-  // ── Header / search (unchanged) ────────────────────────────────────────────
-
   Widget _buildSliverHeader(BuildContext context) {
-    final expandedSearchOpacity =
-        (1 - (_headerCollapse * 1.4)).clamp(0.0, 1.0);
+    final expandedSearchOpacity = (1 - (_headerCollapse * 1.4)).clamp(0.0, 1.0);
     final logoScale = (1 - (_headerCollapse * 0.2)).clamp(0.86, 1.0);
     return Stack(
       fit: StackFit.expand,
       children: [
         Container(
           decoration: const BoxDecoration(
-            image: DecorationImage(
-                image: AssetImage('assets/images/house_interior.png'),
-                fit: BoxFit.cover),
+            image: DecorationImage(image: AssetImage('assets/images/house_interior.png'), fit: BoxFit.cover),
           ),
         ),
         Container(color: Colors.black.withOpacity(0.22)),
@@ -271,29 +407,22 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
                 Transform.scale(
                   scale: logoScale,
                   child: Image.asset(
-                    'assets/images/logo_white.png',
-                    height: 56,
+                    'assets/images/logo.png',
+                    height: 80,
                     errorBuilder: (context, error, stackTrace) => Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text('H/',
-                            style: GoogleFonts.playfairDisplay(
-                                fontSize: 44, color: Colors.white)),
-                        Text('omeCraft',
-                            style: GoogleFonts.playfairDisplay(
-                                fontSize: 40,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white)),
+                        Text('H/', style: GoogleFonts.playfairDisplay(fontSize: 44, color: Colors.white)),
+                        Text(
+                          'omeCraft',
+                          style: GoogleFonts.playfairDisplay(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 38),
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 180),
-                  opacity: expandedSearchOpacity,
-                  child: _buildSearchField(compact: false),
-                ),
+                AnimatedOpacity(duration: const Duration(milliseconds: 180), opacity: expandedSearchOpacity, child: _buildSearchField(compact: false)),
               ],
             ),
           ),
@@ -303,562 +432,109 @@ class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
   }
 
   Widget _buildSearchField({required bool compact}) {
-    final hintColor = compact ? AppColors.textSecondary : Colors.white;
-    final iconColor = compact ? AppColors.textSecondary : Colors.white;
-    final fillColor =
-        compact ? Colors.white : Colors.white.withOpacity(0.12);
-    final borderColor = compact
-        ? AppColors.borderLight
-        : Colors.white.withOpacity(compact ? 0.9 : 1);
-    return TextField(
-      readOnly: true,
-      onTap: () => setState(() => _isSearchActive = true),
-      decoration: InputDecoration(
-        hintText: 'provider.home.search_hint'.tr(),
-        hintStyle: GoogleFonts.outfit(
-            color: hintColor,
-            fontWeight: FontWeight.w300,
-            fontSize: compact ? 15 : 18),
-        prefixIcon: Icon(LucideIcons.search, color: iconColor, size: 22),
-        suffixIcon: Icon(LucideIcons.x, color: iconColor, size: 22),
-        filled: true,
-        fillColor: fillColor,
-        contentPadding: EdgeInsets.symmetric(vertical: compact ? 10 : 15),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(40),
-          borderSide: BorderSide(color: borderColor, width: compact ? 1.2 : 2),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(40),
-          borderSide: BorderSide(
-              color: compact
-                  ? AppColors.primaryRed.withOpacity(0.45)
-                  : Colors.white,
-              width: compact ? 1.4 : 2),
-        ),
-      ),
-    );
+    return PrimaryGradientButton(text: 'provider.home.search_hint', icon: LucideIcons.search, height: compact ? 42 : 55, onPressed: () => context.push('/professional-projects'));
   }
 
-  Widget _buildSearchOverlay(BuildContext context) {
-    return Container(
-      color: Colors.black.withOpacity(0.1),
-      child: Stack(
-        children: [
-          Positioned(
-            top: 180,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.1), blurRadius: 20)
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('provider.home.location'.tr(),
-                      style: GoogleFonts.outfit(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  TextField(
-                    decoration: InputDecoration(
-                      hintText: 'provider.home.search_hint'.tr(),
-                      hintStyle:
-                          GoogleFonts.outfit(color: Colors.black26),
-                      prefixIcon: const Icon(LucideIcons.search,
-                          color: Colors.black26, size: 20),
-                      suffixIcon: IconButton(
-                        icon: const Icon(LucideIcons.x,
-                            color: Colors.black, size: 20),
-                        onPressed: () =>
-                            setState(() => _isSearchActive = false),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 12),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: const BorderSide(
-                            color: Color(0xFF7A0000), width: 1.5),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: const BorderSide(
-                            color: Color(0xFF7A0000), width: 1.5),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                            color: Color(0xFF7A0000),
-                            shape: BoxShape.circle),
-                      ),
-                      const SizedBox(width: 12),
-                      Text('Paris',
-                          style: GoogleFonts.outfit(
-                              fontSize: 16, color: Colors.black87)),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-                  Text('provider.home.date_of_intervention'.tr(),
-                      style: GoogleFonts.outfit(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  SingleChildScrollView(
-                    controller: _dateScrollController,
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: List.generate(
-                        10,
-                        (index) => Container(
-                          width: 80,
-                          margin: const EdgeInsets.only(right: 12),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(
-                              color: const Color(0xFFF8EDED),
-                              borderRadius: BorderRadius.circular(12)),
-                          child: Column(
-                            children: [
-                              Text('Fri',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF7A0000))),
-                              Text('30',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF7A0000))),
-                              Text('May',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: const Color(0xFF7A0000))),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      const Icon(LucideIcons.chevronLeft,
-                          color: Colors.black87, size: 20),
-                      Expanded(
-                        child: Container(
-                          height: 8,
-                          margin:
-                              const EdgeInsets.symmetric(horizontal: 8),
-                          decoration: BoxDecoration(
-                              color: const Color(0xFFE5B9B9),
-                              borderRadius: BorderRadius.circular(4)),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              const double barWidth = 80;
-                              final double maxScrollableWidth =
-                                  constraints.maxWidth - barWidth;
-                              return Stack(
-                                children: [
-                                  Positioned(
-                                    left: _scrollProgress *
-                                        maxScrollableWidth,
-                                    child: Container(
-                                      width: barWidth,
-                                      height: 8,
-                                      decoration: BoxDecoration(
-                                          color: const Color(0xFF7A0000),
-                                          borderRadius:
-                                              BorderRadius.circular(4)),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      const Icon(LucideIcons.chevronRight,
-                          color: Colors.black87, size: 20),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: () => setState(() => _isSearchActive = false),
-            child: Container(
-                width: double.infinity,
-                height: double.infinity,
-                color: Colors.transparent),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Booking request card ──────────────────────────────────────────────────────
-
-class _BookingRequestCard extends StatefulWidget {
-  const _BookingRequestCard({required this.booking, required this.onDismiss});
-  final Booking booking;
-  final VoidCallback onDismiss;
-
-  @override
-  State<_BookingRequestCard> createState() => _BookingRequestCardState();
-}
-
-class _BookingRequestCardState extends State<_BookingRequestCard> {
-  final _ds = BookingRemoteDatasource();
-  bool _accepting = false;
-  bool _rejecting = false;
-
-  bool get _busy => _accepting || _rejecting;
-
-  Future<void> _accept() async {
-    setState(() => _accepting = true);
-    try {
-      await _ds.updateBookingStatus(widget.booking.id, 'accepted');
-      if (!mounted) return;
-      AppToast.success('Booking accepted!');
-      widget.onDismiss();
-    } catch (e) {
-      if (!mounted) return;
-      AppToast.error(e.toString()
-          .replaceFirst('ApiException: ', '')
-          .replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _accepting = false);
-    }
-  }
-
-  Future<void> _reject() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black45,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Reject this booking?',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-        content: Text(
-          'The client will be notified that you are unavailable.',
-          style: GoogleFonts.outfit(color: Colors.black54, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel',
-                style: GoogleFonts.outfit(color: Colors.black54)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryRed,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-            ),
-            child: Text('Reject', style: GoogleFonts.outfit()),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    setState(() => _rejecting = true);
-    try {
-      await _ds.updateBookingStatus(widget.booking.id, 'rejected');
-      if (!mounted) return;
-      AppToast.success('Booking rejected.');
-      widget.onDismiss();
-    } catch (e) {
-      if (!mounted) return;
-      AppToast.error(e.toString()
-          .replaceFirst('ApiException: ', '')
-          .replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _rejecting = false);
-    }
-  }
-
-  /// Build a lightweight Project so we can reuse the details screen UI.
-  Project _bookingAsProject(Booking b) => Project(
-        id: b.projectId ?? b.id.toString(),
-        title: b.clientName ?? 'Booking #${b.id}',
-        description: b.notes ?? '',
-        location: b.location ?? '',
-        date: b.scheduledDate != null ? _fmtDate(b.scheduledDate!) : '',
-        clientUserId: b.clientId,
-        clientDisplayName: b.clientName,
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final b = widget.booking;
-    final clientPhoto = b.clientPhoto;
-    final hasPhoto =
-        clientPhoto != null && clientPhoto.startsWith('http');
-
-    return GestureDetector(
-      onTap: () => context.push(
-        '/project-details',
-        extra: (project: _bookingAsProject(b), bookingId: b.id),
-      ),
-      child: Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+  Widget _buildProjectCard(Project p) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 2,
+      shadowColor: Colors.black26,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header: client info ────────────────────────────────────
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: const BoxDecoration(
-              color: Color(0xFFFDF3F3),
-              borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Row(
-              children: [
-                // Avatar
-                ClipOval(
-                  child: hasPhoto
-                      ? Image.network(clientPhoto,
-                          width: 46,
-                          height: 46,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              _avatarFallback(b.clientName))
-                      : _avatarFallback(b.clientName),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        b.clientName ?? 'Client',
-                        style: GoogleFonts.outfit(
-                            fontSize: 15, fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        'Booking #${b.id}',
-                        style: GoogleFonts.outfit(
-                            fontSize: 12, color: Colors.black38),
-                      ),
-                    ],
-                  ),
-                ),
-                // PENDING chip
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3CD),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: const Color(0xFFFFC107), width: 1),
-                  ),
-                  child: Text(
-                    'PENDING',
-                    style: GoogleFonts.outfit(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF856404)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Details ───────────────────────────────────────────────
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (b.scheduledDate != null)
-                  _infoRow(LucideIcons.calendar,
-                      _fmtDate(b.scheduledDate!), AppColors.primaryRed),
-                if (b.slotStart != null || b.slotEnd != null)
-                  _infoRow(
-                    LucideIcons.clock,
-                    [b.slotStart, b.slotEnd]
-                        .whereType<String>()
-                        .join(' – '),
-                    Colors.black54,
-                  ),
-                if (b.location != null && b.location!.isNotEmpty)
-                  _infoRow(
-                      LucideIcons.mapPin, b.location!, Colors.black54),
-                if (b.notes != null && b.notes!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    b.notes!,
-                    style: GoogleFonts.outfit(
-                        fontSize: 13,
-                        color: Colors.black54,
-                        height: 1.45),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                const SizedBox(height: 16),
-
-                // ── Chat + Accept / Reject buttons ────────────────
-                Row(
-                  children: [
-                    // Message icon button
-                    GestureDetector(
-                      onTap: _busy
-                          ? null
-                          : () => context.push(
-                                '/chat',
-                                extra: ProfessionalChatArgs(
-                                  clientUserId: b.clientId ?? '',
-                                  clientDisplayName:
-                                      b.clientName ?? 'Client',
-                                  isCurrentUserProfessional: true,
-                                  projectId: b.projectId,
-                                ),
-                              ),
-                      child: Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0F0F0),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(LucideIcons.messageCircle,
-                            size: 20, color: Colors.black54),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    // Reject
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _busy ? null : _reject,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primaryRed,
-                          side: const BorderSide(
-                              color: AppColors.primaryRed, width: 1.5),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: _rejecting
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppColors.primaryRed))
-                            : Text('Reject',
-                                style: GoogleFonts.outfit(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    // Accept
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _busy ? null : _accept,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF238E10),
-                          foregroundColor: Colors.white,
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          elevation: 0,
-                        ),
-                        child: _accepting
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white))
-                            : Text('Accept',
-                                style: GoogleFonts.outfit(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),  // Container
-    );  // GestureDetector
-  }
-
-  Widget _infoRow(IconData icon, String text, Color color) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Row(
+        onTap: () => context.push('/project-details', extra: p),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(text,
-                  style: GoogleFonts.outfit(
-                      fontSize: 13, color: Colors.black54)),
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 190,
+                    child: ProjectImagePlaceholder.hasDisplayableUrl(p.imageUrl)
+                        ? Image.network(
+                            p.imageUrl!,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return AppShimmer(child: const ShimmerBox(width: double.infinity, height: 190, radius: 0));
+                            },
+                            errorBuilder: (_, __, ___) => const ProjectImagePlaceholder(height: 190),
+                          )
+                        : const ProjectImagePlaceholder(height: 190),
+                  ),
+                ),
+                Positioned(top: 12, right: 12, child: ProjectFavoriteButton(project: p)),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          p.title.isNotEmpty ? p.title : (p.serviceType ?? '—'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    p.description.isEmpty ? 'No description available.' : p.description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textMain, height: 1.35),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(LucideIcons.mapPin, size: 17, color: AppColors.primaryRed),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          p.location.isEmpty ? 'N/A' : p.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textMain),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(p.date.isEmpty ? 'N/A' : p.date, style: GoogleFonts.outfit(fontSize: 13, color: AppColors.textMain)),
+                      const SizedBox(width: 6),
+                      const Icon(LucideIcons.calendar, size: 17, color: AppColors.textSecondary),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Divider(height: 1, color: Colors.grey.shade300),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(LucideIcons.wallet, size: 18, color: AppColors.primaryRed),
+                      const SizedBox(width: 6),
+                      Text('Budget (€)', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textMain)),
+                      const Spacer(),
+                      Text(
+                        p.budget ?? 'N/A',
+                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.primaryRed),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-      );
-
-  Widget _avatarFallback(String? name) => Container(
-        width: 46,
-        height: 46,
-        color: AppColors.primaryRed.withOpacity(0.12),
-        child: Center(
-          child: Text(
-            (name?.isNotEmpty == true ? name![0] : 'C').toUpperCase(),
-            style: GoogleFonts.outfit(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primaryRed),
-          ),
-        ),
-      );
-
-  static String _fmtDate(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+      ),
+    );
+  }
 }

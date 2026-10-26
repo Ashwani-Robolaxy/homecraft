@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:geolocator/geolocator.dart';
 
@@ -7,6 +8,7 @@ import '../../../core/network/api_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/storage/session_storage.dart';
 import '../domain/models/professional_listing.dart';
+import '../domain/models/professional_review.dart';
 
 /// Client discovery feed from `/users/professionals/search`.
 class ProfessionalsRemoteDatasource {
@@ -18,11 +20,17 @@ class ProfessionalsRemoteDatasource {
 
   final ApiClient _api;
   final SessionStorage _session;
+  static DateTime? _lastLocationSyncAt;
 
   /// Best-effort location sync. Never throws — any failure is silently ignored
   /// so it never blocks the professionals search.
   Future<void> updateUserLocationFromDevice() async {
     try {
+      final now = DateTime.now();
+      if (_lastLocationSyncAt != null &&
+          now.difference(_lastLocationSyncAt!) < const Duration(minutes: 2)) {
+        return;
+      }
       final token = await _session.getToken();
       if (token == null || token.isEmpty) return;
 
@@ -47,6 +55,7 @@ class ProfessionalsRemoteDatasource {
         body: {'latitude': position.latitude, 'longitude': position.longitude},
         token: token,
       );
+      _lastLocationSyncAt = now;
     } catch (_) {
       // Location sync is optional; never block the search.
     }
@@ -60,6 +69,9 @@ class ProfessionalsRemoteDatasource {
     double? maxDistanceKm,
     Set<String>? availability,
     int? minRating,
+    double? latitude,
+    double? longitude,
+    DateTime? interventionDate,
   }) async {
     final token = await _session.getToken();
     if (token == null || token.isEmpty) {
@@ -67,37 +79,225 @@ class ProfessionalsRemoteDatasource {
     }
     final trimmedQuery = query?.trim();
     final trimmedLocation = location?.trim();
+    final now = interventionDate ?? DateTime.now();
+    final dateYmd =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final coords = await _deviceCoordinates();
+    
+    // Default fallback to Paris coordinates (48.856614, 2.3522219) for general discovery/recommendations feed
+    // or when the device coordinates are far outside France.
+    double lat = latitude ?? coords?.$1 ?? 48.856614;
+    double long = longitude ?? coords?.$2 ?? 2.3522219;
 
-    // Fire location sync in the background — don't block the search on GPS.
-    unawaited(updateUserLocationFromDevice());
-    final params = <String, String>{
-      'limit': '${limit.clamp(1, 100)}',
-      if (trimmedQuery != null && trimmedQuery.isNotEmpty) 'query': trimmedQuery,
-      if (trimmedLocation != null && trimmedLocation.isNotEmpty) 'location': trimmedLocation,
-      if (categoryId != null) 'categoryId': '$categoryId',
-      if (maxDistanceKm != null) 'maxDistanceKm': maxDistanceKm.toStringAsFixed(0),
-      if (availability != null) 'availability': _availabilityParam(availability),
-      if (minRating != null) 'minRating': '$minRating',
-    };
-    final q = params.entries.map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}').join('&');
-    late final Map<String, dynamic> map;
-    try {
-      map = await _api.get('/users/professionals/search?$q', token: token);
-    } on ApiException catch (e) {
-      final msg = e.message.toLowerCase();
-      if (msg.contains('/users/location') || msg.contains('save your location')) {
-        throw ApiException('Please enter your city in search before searching professionals.', statusCode: e.statusCode);
+    if (latitude == null && (trimmedLocation == null || trimmedLocation.isEmpty)) {
+      final isOutsideFrance = lat < 41.0 || lat > 52.0 || long < -5.5 || long > 10.0;
+      if (isOutsideFrance) {
+        lat = 48.856614;
+        long = 2.3522219;
       }
-      rethrow;
     }
-    final raw = _extractList(map);
-    final base = raw
-        .whereType<Map<String, dynamic>>()
-        .where((e) => _professionalIdFrom(e).isNotEmpty || _displayNameFrom(e).isNotEmpty)
-        .toList();
-    final enriched = await _enrichWithProfessionalDetails(base, token: token);
+
+    // Fetch categories to get IDs and name mappings
+    List<Map<String, dynamic>> allCategoriesMap = [];
+    List<int> fetchedIds = [];
+    try {
+      final catMap = await _api.get('/projects/categories', token: token);
+      final catList = (catMap['categories'] ?? catMap['data']) as List?;
+      if (catList != null) {
+        for (final item in catList) {
+          if (item is Map<String, dynamic>) {
+            allCategoriesMap.add(item);
+            final id = item['id'] as int?;
+            if (id != null) fetchedIds.add(id);
+          }
+        }
+      }
+    } catch (e) {
+      developer.log('Failed to fetch categories: $e', name: 'ProfessionalsRemoteDatasource');
+    }
+
+    final List<int> categoryIds;
+    if (categoryId != null) {
+      categoryIds = [categoryId];
+    } else {
+      categoryIds = fetchedIds.isNotEmpty ? fetchedIds : [1, 2, 3, 4, 5, 6, 25, 26];
+    }
+
+    final isFranceSearch = trimmedLocation != null &&
+        (trimmedLocation.toLowerCase().contains('france') ||
+            trimmedLocation.toLowerCase().contains(', fr') ||
+            trimmedLocation.toLowerCase() == 'fr');
+
+    if (latitude != null && longitude != null) {
+      try {
+        await _api.put(
+          '/users/location',
+          body: {'latitude': lat, 'longitude': long},
+          token: token,
+        );
+      } catch (e) {
+        developer.log('Failed to sync search location to backend: $e', name: 'ProfessionalsRemoteDatasource');
+      }
+    } else {
+      unawaited(updateUserLocationFromDevice());
+    }
+
+    // Use wide radius for default recommendation feeds so all available professionals are discovered
+    final double radiusValue = (latitude == null && (trimmedLocation == null || trimmedLocation.isEmpty))
+        ? 10000.0
+        : (isFranceSearch ? 2000.0 : (maxDistanceKm ?? 500.0));
+
+    final baseParams = <String, String>{
+      'limit': '${limit.clamp(1, 100)}',
+      'radiusKm': radiusValue.toStringAsFixed(0),
+      'maxDistanceKm': radiusValue.toStringAsFixed(0),
+      if (availability != null) 'availability': _availabilityParam(availability),
+      'lat': lat.toString(),
+      'long': long.toString(),
+      'date': dateYmd,
+    };
+    if (trimmedQuery != null && trimmedQuery.isNotEmpty) {
+      baseParams['query'] = trimmedQuery;
+    }
+    if (trimmedLocation != null && trimmedLocation.isNotEmpty) {
+      baseParams['location'] = trimmedLocation;
+    }
+    if (minRating != null) {
+      baseParams['minRating'] = '$minRating';
+    }
+
+    String encode(Map<String, String> map) => map.entries
+        .map((e) =>
+            '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+
+    // Run search calls in parallel for all resolved categoryIds
+    final searchFutures = categoryIds.map((catId) async {
+      final params = Map<String, String>.from(baseParams);
+      params['categoryId'] = '$catId';
+      
+      developer.log(
+        'Search API payload for categoryId $catId => $params',
+        name: 'ProfessionalsRemoteDatasource',
+      );
+      
+      try {
+        final resMap = await _api.get(
+          '/users/professionals/search?${encode(params)}',
+          token: token,
+        );
+        return _extractList(resMap);
+      } on ApiException catch (e) {
+        final msg = e.message.toLowerCase();
+        if (msg.contains('/users/location') || msg.contains('save your location')) {
+          throw ApiException(
+            'Please enter your city in search before searching professionals.',
+            statusCode: e.statusCode,
+          );
+        }
+        if (e.statusCode == 422) {
+          return const [];
+        }
+        rethrow;
+      } catch (e) {
+        developer.log('Search failed for categoryId $catId: $e', name: 'ProfessionalsRemoteDatasource');
+        return const [];
+      }
+    });
+
+    final searchResults = await Future.wait(searchFutures);
+    List<dynamic> raw = searchResults.expand((e) => e).toList();
+
+    // If a specific category was searched but returned 0 results from backend,
+    // fallback to searching all categories and filtering by category name/specialty client-side
+    if (raw.isEmpty && categoryId != null) {
+      final fallbackCat = allCategoriesMap.firstWhere(
+        (c) => c['id'] == categoryId,
+        orElse: () => const <String, dynamic>{},
+      );
+      final catName = (fallbackCat['name'] ?? '').toString().toLowerCase().trim();
+      final catSlug = (fallbackCat['slug'] ?? '').toString().toLowerCase().trim();
+
+      final allCatIds = fetchedIds.isNotEmpty ? fetchedIds : [1, 2, 3, 4, 5, 6, 25, 26];
+      final allFutures = allCatIds.map((cId) async {
+        final params = Map<String, String>.from(baseParams);
+        params['categoryId'] = '$cId';
+        try {
+          final resMap = await _api.get(
+            '/users/professionals/search?${encode(params)}',
+            token: token,
+          );
+          return _extractList(resMap);
+        } catch (_) {
+          return const [];
+        }
+      });
+      final allResults = await Future.wait(allFutures);
+      final allRaw = allResults.expand((e) => e).toList();
+
+      if (catName.isNotEmpty || catSlug.isNotEmpty) {
+        raw = allRaw.where((item) {
+          if (item is! Map) return false;
+          final m = Map<String, dynamic>.from(item);
+          final itemCatId = m['categoryId'] ?? m['category_id'];
+          if (itemCatId != null && itemCatId.toString() == '$categoryId') return true;
+          final spec = (m['speciality'] ?? m['specialty'] ?? m['categoryName'] ?? m['profession'] ?? m['role'] ?? '').toString().toLowerCase();
+          if (catName.isNotEmpty && spec.contains(catName)) return true;
+          if (catSlug.isNotEmpty && spec.contains(catSlug)) return true;
+          return false;
+        }).toList();
+      }
+    }
+
+    developer.log(
+      'Search API responses combined items: ${raw.length}',
+      name: 'ProfessionalsRemoteDatasource',
+    );
+
+    // Deduplicate items by professional ID or display name to avoid duplicates across queries
+    final seenIds = <String>{};
+    final base = <Map<String, dynamic>>[];
+    for (final item in raw) {
+      if (item is Map<String, dynamic>) {
+        final id = _professionalIdFrom(item);
+        if (id.isNotEmpty) {
+          if (!seenIds.contains(id)) {
+            seenIds.add(id);
+            base.add(item);
+          }
+        } else {
+          final displayName = _displayNameFrom(item);
+          if (displayName.isNotEmpty && !seenIds.contains(displayName)) {
+            seenIds.add(displayName);
+            base.add(item);
+          }
+        }
+      }
+    }
+
+    // Never block the recommendations feed on detail-enrichment calls.
+    // If enrichment is slow/fails, fall back to base results immediately.
+    List<Map<String, dynamic>> enriched = base;
+    try {
+      enriched = await _enrichWithProfessionalDetails(base, token: token)
+          .timeout(const Duration(seconds: 8), onTimeout: () => base);
+    } catch (_) {
+      enriched = base;
+    }
+
     final listings = enriched.map(ProfessionalListing.fromMap).toList();
-    return _applyClientSideQueryGuard(listings, query: trimmedQuery);
+    developer.log(
+      'Search API mapped listings => ${listings.length}',
+      name: 'ProfessionalsRemoteDatasource',
+    );
+    return _applyClientSideFilters(
+      listings,
+      query: trimmedQuery,
+      searchLocation: trimmedLocation,
+      searchLat: latitude,
+      searchLng: longitude,
+      maxDistanceKm: maxDistanceKm,
+    );
   }
 
   List<dynamic> _extractList(Map<String, dynamic> map) {
@@ -301,6 +501,40 @@ class ProfessionalsRemoteDatasource {
     return urls;
   }
 
+  /// Fetches one professional by id and maps all available detail data into listing shape.
+  Future<ProfessionalListing> fetchProfessionalById(String professionalId) async {
+    final token = await _session.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('Please login again.');
+    }
+    final id = professionalId.trim();
+    if (id.isEmpty) {
+      throw ApiException('Professional id is required.');
+    }
+
+    final raw = await _api.get('/users/professionals/$id', token: token);
+    final payload = _extractPayload(raw) ?? raw;
+    final withCollections = _attachTopLevelCollections(payload, raw);
+    final normalized = _normalizePortfolioProjection(withCollections);
+    final merged = _deepMerge(_deepMerge({'id': id}, withCollections), normalized);
+    return ProfessionalListing.fromMap(merged);
+  }
+
+  /// Fetches reviews and ratings for a professional via `/users/professionals/{professionalId}/reviews`.
+  Future<ProfessionalReviewsSummary> fetchProfessionalReviewsById(String professionalId) async {
+    final token = await _session.getToken();
+    if (token == null || token.isEmpty) {
+      throw ApiException('Please login again.');
+    }
+    final proId = professionalId.trim();
+    if (proId.isEmpty) {
+      throw ApiException('Professional id is missing.');
+    }
+
+    final res = await _api.get('/users/professionals/$proId/reviews', token: token);
+    return ProfessionalReviewsSummary.fromMap(res);
+  }
+
   String _toAbsoluteUrl(String raw) {
     if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
     final base = ApiConfig.baseUrl.endsWith('/')
@@ -342,6 +576,29 @@ class ProfessionalsRemoteDatasource {
     return 'any';
   }
 
+  Future<(double, double)?> _deviceCoordinates() async {
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) return null;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return null;
+      }
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) return (last.latitude, last.longitude);
+      final current = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.low),
+      ).timeout(const Duration(seconds: 2), onTimeout: () => throw Exception('GPS timeout'));
+      return (current.latitude, current.longitude);
+    } catch (_) {
+      return null;
+    }
+  }
+
   List<ProfessionalListing> _applyClientSideQueryGuard(
     List<ProfessionalListing> listings, {
     required String? query,
@@ -367,5 +624,78 @@ class ProfessionalsRemoteDatasource {
     if (qNorm.contains('carpent')) out.addAll({'carpentry', 'carpenter'});
     if (qNorm.contains('clean')) out.addAll({'cleaning', 'cleaner'});
     return out;
+  }
+
+  List<ProfessionalListing> _applyClientSideFilters(
+    List<ProfessionalListing> listings, {
+    required String? query,
+    required String? searchLocation,
+    required double? searchLat,
+    required double? searchLng,
+    required double? maxDistanceKm,
+  }) {
+    var filtered = _applyClientSideQueryGuard(listings, query: query);
+
+    final sLoc = searchLocation?.trim().toLowerCase() ?? '';
+    final isFranceSearch = sLoc.contains('france') || sLoc.contains(', fr') || sLoc == 'fr';
+    final limitRadius = maxDistanceKm ?? 500.0;
+
+    if (sLoc.isEmpty && searchLat == null && searchLng == null) {
+      return filtered;
+    }
+
+    return filtered.where((p) {
+      if (sLoc.isNotEmpty) {
+        final locLower = p.location.toLowerCase();
+        if (isFranceSearch) {
+          if (locLower.contains('france') || locLower.contains('fr') || locLower.contains('paris') || locLower.contains('queaux')) {
+            return true;
+          }
+          final servesFrance = p.serviceAreas.any((area) {
+            final label = area.label?.toLowerCase() ?? '';
+            return label == 'france' || label == 'fr' || label.contains('france');
+          });
+          if (servesFrance) return true;
+        }
+
+        final cleanSearch = sLoc.replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+        final cleanLocation = locLower.replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+        if (cleanLocation.contains(cleanSearch) || cleanSearch.contains(cleanLocation)) {
+          return true;
+        }
+
+        final hasMatchingLabel = p.serviceAreas.any((area) {
+          final label = area.label?.toLowerCase() ?? '';
+          if (label.isEmpty) return false;
+
+          final cleanLabel = label.replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+          final searchWords = cleanSearch.split(' ');
+          final labelWords = cleanLabel.split(' ');
+
+          if (searchWords.isNotEmpty && labelWords.isNotEmpty) {
+            if (searchWords.first == labelWords.first || cleanLabel.contains(cleanSearch)) return true;
+          }
+          return false;
+        });
+        if (hasMatchingLabel) return true;
+      }
+
+      final lat1 = searchLat;
+      final lng1 = searchLng;
+      if (lat1 != null && lng1 != null) {
+        if (p.latitude != null && p.longitude != null) {
+          final dist = Geolocator.distanceBetween(lat1, lng1, p.latitude!, p.longitude!) / 1000.0;
+          if (dist <= limitRadius) return true;
+        }
+        for (final area in p.serviceAreas) {
+          if (area.latitude != null && area.longitude != null) {
+            final dist = Geolocator.distanceBetween(lat1, lng1, area.latitude!, area.longitude!) / 1000.0;
+            if (dist <= limitRadius) return true;
+          }
+        }
+      }
+
+      return false;
+    }).toList();
   }
 }

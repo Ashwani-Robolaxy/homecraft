@@ -1,8 +1,10 @@
 // App Router Module
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_state_notifier.dart';
+import '../constants/app_assets.dart';
 import '../network/api_client.dart';
 import '../services/app_toast.dart';
 import '../storage/session_storage.dart';
@@ -21,10 +23,10 @@ import '../../features/home/presentation/screens/provider_main_screen.dart';
 import '../../features/home/presentation/screens/edit_calendar_screen.dart';
 import '../../features/projects/presentation/screens/project_list_screen.dart';
 import '../../features/projects/presentation/screens/create_project_screen.dart';
+import '../../features/projects/presentation/screens/professional_projects_discover_screen.dart';
 import '../../features/projects/presentation/screens/project_details_screen.dart';
 import '../../features/projects/presentation/screens/service_details_screen.dart';
 import '../../features/home/presentation/screens/professional_results_screen.dart';
-import '../../features/home/presentation/screens/map_screen.dart';
 import '../../features/home/presentation/screens/take_action_screen.dart';
 import '../../features/report/domain/report_args.dart';
 import '../../features/home/presentation/screens/chat_screen.dart';
@@ -41,6 +43,8 @@ import '../../features/profile/presentation/screens/terms_of_services_screen.dar
 import '../../features/profile/presentation/screens/about_us_screen.dart' as profile;
 import '../../features/profile/presentation/screens/provider_profile_info_screen.dart';
 import '../../features/profile/presentation/screens/edit_personal_info_screen.dart';
+import '../../features/profile/presentation/screens/professional_reviews_screen.dart';
+import '../../features/profile/presentation/screens/notification_screen.dart';
 import '../../features/profile/presentation/screens/notification_preference_screen.dart';
 import '../../features/profile/presentation/screens/accepted_projects_screen.dart';
 import '../../features/profile/presentation/screens/provider_favorites_screen.dart';
@@ -50,10 +54,13 @@ import '../../features/projects/domain/models/project.dart';
 import '../../features/professionals/presentation/screens/professional_detail_screen.dart';
 import '../../features/professionals/domain/models/professional_listing.dart';
 import '../../features/booking/presentation/screens/create_booking_screen.dart';
+import '../../features/favorites/domain/favorite_collection.dart';
+import '../../features/favorites/presentation/screens/favorite_collection_detail_screen.dart';
+import '../services/push_notification_service.dart';
 
 const _publicPaths = ['/splash', '/onboarding', '/login', '/register', '/forgot-password', '/terms', '/privacy', '/verify-otp', '/reset-password'];
 
-GoRouter _createRouter(AuthStateNotifier authNotifier) {
+GoRouter _createRouter(AuthStateNotifier authNotifier, Ref ref) {
   // Wire the 401 / expired-token handler once per router instance.
   ApiClient.onUnauthorized = () async {
     await SessionStorage().clear();
@@ -64,7 +71,7 @@ GoRouter _createRouter(AuthStateNotifier authNotifier) {
     }
   };
 
-  return GoRouter(
+  final router = GoRouter(
     navigatorKey: AppToast.navigatorKey,
     refreshListenable: authNotifier,
     initialLocation: '/splash',
@@ -80,99 +87,215 @@ GoRouter _createRouter(AuthStateNotifier authNotifier) {
     },
     routes: _routes,
   );
+
+  PushNotificationService.instance.onNotificationOpened = (data) {
+    final user = authNotifier.currentUser;
+    if (user == null) return; // User must be authenticated to navigate
+
+    final type = (data['type']?.toString() ?? '').toLowerCase();
+    final bookingId = data['bookingId']?.toString();
+    final isBooking = type.contains('book') || (bookingId != null && bookingId.isNotEmpty);
+
+    if (type == 'chat') {
+      final otherUserId = data['senderId']?.toString() ?? data['userId']?.toString() ?? '';
+      final otherUserName = data['senderName']?.toString() ?? data['username']?.toString() ?? 'Chat';
+      final otherUserImage = data['senderImage']?.toString() ?? data['profileImage']?.toString();
+      final pId = data['projectId']?.toString();
+
+      if (otherUserId.isNotEmpty) {
+        router.push(
+          '/chat',
+          extra: ProfessionalChatArgs(
+            clientUserId: otherUserId,
+            clientDisplayName: otherUserName,
+            clientImageUrl: otherUserImage,
+            projectId: pId,
+            isCurrentUserProfessional: user.isProvider,
+            professionalId: user.isProvider ? user.uid : otherUserId,
+          ),
+        );
+      }
+    } else if (isBooking) {
+      if (user.isProvider) {
+        ref.read(providerTabIndexProvider.notifier).setIndex(2);
+        router.go('/provider-home');
+      } else {
+        ref.read(clientTabIndexProvider.notifier).setIndex(2);
+        router.go('/home');
+      }
+    } else {
+      router.push('/notifications');
+    }
+  };
+
+  return router;
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final notifier = ref.watch(authStateNotifierProvider);
-  return _createRouter(notifier);
+  return _createRouter(notifier, ref);
 });
 
 final List<RouteBase> _routes = [
-    GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
-    GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
-    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-    GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
-    GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
-    GoRoute(path: '/verify-otp', builder: (context, state) => const OtpVerificationScreen()),
-    GoRoute(path: '/reset-password', builder: (context, state) => const ResetPasswordScreen()),
-    GoRoute(path: '/terms', builder: (context, state) => const TermsOfServiceScreen()),
-    GoRoute(path: '/privacy', builder: (context, state) => const PrivacyPolicyScreen()),
-    GoRoute(path: '/home', builder: (context, state) => const MainScreen()),
-    GoRoute(path: '/projects', builder: (context, state) => const ProjectListScreen()),
-    GoRoute(path: '/create-project', builder: (context, state) => const CreateProjectScreen()),
-    GoRoute(
-      path: '/project-details',
-      builder: (context, state) {
-        final extra = state.extra;
-        if (extra is ({Project project, int bookingId})) {
-          return ProjectDetailsScreen(
-              project: extra.project, bookingId: extra.bookingId);
-        }
-        return ProjectDetailsScreen(project: extra as Project);
-      },
-    ),
-    GoRoute(path: '/service-details', builder: (context, state) => const ServiceDetailsScreen()),
-    GoRoute(path: '/professional-results', builder: (context, state) => const ProfessionalResultsScreen()),
-    GoRoute(
-      path: '/professional-detail',
-      builder: (context, state) {
-        final listing = state.extra as ProfessionalListing;
-        return ProfessionalDetailScreen(listing: listing);
-      },
-    ),
-    GoRoute(path: '/map', builder: (context, state) => const MapScreen()),
-    GoRoute(
-      path: '/take-action',
-      builder: (context, state) {
-        final args = state.extra is ReportArgs ? state.extra as ReportArgs : null;
-        return TakeActionScreen(args: args);
-      },
-    ),
-    GoRoute(
-      path: '/chat',
-      builder: (context, state) {
-        final extra = state.extra;
-        final args = extra is ProfessionalChatArgs ? extra : null;
-        return ChatScreen(args: args);
-      },
-    ),
-    GoRoute(
-      path: '/media',
-      builder: (context, state) {
-        final proId = state.extra is String ? state.extra as String : null;
-        return MediaScreen(professionalId: proId);
-      },
-    ),
-    GoRoute(path: '/professional-setup', builder: (context, state) => const ProfessionalSetupScreen()),
-    GoRoute(path: '/provider-home', builder: (context, state) => const ProviderMainScreen()),
-    GoRoute(path: '/edit-calendar', builder: (context, state) => const EditCalendarScreen()),
-    GoRoute(path: '/profile', builder: (context, state) => const profile.ProfileScreen()),
-    GoRoute(path: '/personal-info', builder: (context, state) => const profile.PersonalInfoScreen()),
-    GoRoute(path: '/settings', builder: (context, state) => const profile.SettingsScreen()),
-    GoRoute(path: '/contact-support', builder: (context, state) => const profile.ContactSupportScreen()),
-    GoRoute(path: '/reset-password-profile', builder: (context, state) => const profile.ResetPasswordScreen()),
-    GoRoute(path: '/privacy-policy', builder: (context, state) => const profile.PrivacyPolicyScreen()),
-    GoRoute(path: '/terms-of-service', builder: (context, state) => const profile.TermsOfServiceScreen()),
-    GoRoute(path: '/about-us', builder: (context, state) => const profile.AboutUsScreen()),
-    GoRoute(path: '/provider-profile-info', builder: (context, state) => const ProviderProfileInfoScreen()),
-    GoRoute(path: '/edit-personal-info', builder: (context, state) => const EditPersonalInfoScreen()),
-    GoRoute(path: '/notification-preference', builder: (context, state) => const NotificationPreferenceScreen()),
-    GoRoute(path: '/accepted-projects', builder: (context, state) => const AcceptedProjectsScreen()),
-    GoRoute(path: '/provider-favorites', builder: (context, state) => const ProviderFavoritesScreen()),
-    GoRoute(path: '/subscription-plans', builder: (context, state) => const SubscriptionPlansScreen()),
-    GoRoute(path: '/professional-portfolio', builder: (context, state) => const PortfolioManagementScreen()),
-    GoRoute(
-      path: '/create-booking',
-      builder: (context, state) {
-        final extra = state.extra as Map<String, dynamic>? ?? {};
-        return CreateBookingScreen(
-          args: CreateBookingArgs(
-            professionalId: (extra['professionalId'] ?? '').toString(),
-            professionalName: (extra['professionalName'] ?? 'Professional').toString(),
-            professionalPhoto: extra['professionalPhoto']?.toString(),
-            professionalProfession: extra['professionalProfession']?.toString(),
+  GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
+  GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
+  GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+  GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
+  GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
+  GoRoute(path: '/verify-otp', builder: (context, state) => const OtpVerificationScreen()),
+  GoRoute(path: '/reset-password', builder: (context, state) => const ResetPasswordScreen()),
+  GoRoute(path: '/terms', builder: (context, state) => const TermsOfServiceScreen()),
+  GoRoute(path: '/privacy', builder: (context, state) => const PrivacyPolicyScreen()),
+  GoRoute(path: '/home', builder: (context, state) => const MainScreen()),
+  GoRoute(path: '/projects', builder: (context, state) => const ProjectListScreen()),
+  GoRoute(
+    path: '/create-project',
+    builder: (context, state) {
+      final project = state.extra is Project ? state.extra as Project : null;
+      return CreateProjectScreen(initialProject: project);
+    },
+  ),
+  GoRoute(
+    path: '/project-details',
+    builder: (context, state) {
+      final extra = state.extra;
+      if (extra is ({Project project, int bookingId})) {
+        return ProjectDetailsScreen(project: extra.project, bookingId: extra.bookingId);
+      }
+      if (extra is ({Project project, bool openAsClientOwner})) {
+        return ProjectDetailsScreen(project: extra.project, openAsClientOwner: extra.openAsClientOwner);
+      }
+      return ProjectDetailsScreen(project: extra as Project);
+    },
+  ),
+  GoRoute(path: '/service-details', builder: (context, state) => const ServiceDetailsScreen()),
+  GoRoute(
+    path: '/professional-results',
+    builder: (context, state) {
+      final extra = state.extra;
+      int initialTab = 0;
+      if (extra is Map && extra.containsKey('initialTab')) {
+        initialTab = extra['initialTab'] as int? ?? 0;
+      }
+      return ProfessionalResultsScreen(initialTab: initialTab);
+    },
+  ),
+  GoRoute(
+    path: '/professional-detail',
+    builder: (context, state) {
+      final extra = state.extra;
+      if (extra is ProfessionalListing) {
+        return ProfessionalDetailScreen(listing: extra);
+      }
+      if (extra is ProfessionalDetailArgs) {
+        return ProfessionalDetailScreen(listing: extra.listing);
+      }
+      if (extra is String && extra.trim().isNotEmpty) {
+        return ProfessionalDetailScreen(
+          listing: ProfessionalListing(
+            id: extra.trim(),
+            displayName: '',
+            specialty: '',
+            roleLabel: '',
+            location: '',
+            costDisplay: '',
+            dateDisplay: '',
+            profileAssetFallback: AppAssets.profilePlaceholder,
+            backgroundAssetFallback: AppAssets.homeHeaderBg,
           ),
         );
-      },
-    ),
-  ];
+      }
+      return const Scaffold(body: Center(child: Text('Invalid professional')));
+    },
+  ),
+  GoRoute(
+    path: '/take-action',
+    builder: (context, state) {
+      final args = state.extra is ReportArgs ? state.extra as ReportArgs : null;
+      return TakeActionScreen(args: args);
+    },
+  ),
+  GoRoute(
+    path: '/chat',
+    builder: (context, state) {
+      final extra = state.extra;
+      final args = extra is ProfessionalChatArgs ? extra : null;
+      return ChatScreen(args: args);
+    },
+  ),
+  GoRoute(
+    path: '/media',
+    builder: (context, state) {
+      final proId = state.extra is String ? state.extra as String : null;
+      return MediaScreen(professionalId: proId);
+    },
+  ),
+  GoRoute(path: '/professional-setup', builder: (context, state) => const ProfessionalSetupScreen()),
+  GoRoute(path: '/provider-home', builder: (context, state) => const ProviderMainScreen()),
+  GoRoute(path: '/edit-calendar', builder: (context, state) => const EditCalendarScreen()),
+  GoRoute(path: '/profile', builder: (context, state) => const profile.ProfileScreen()),
+  GoRoute(path: '/personal-info', builder: (context, state) => const profile.PersonalInfoScreen()),
+  GoRoute(path: '/settings', builder: (context, state) => const profile.SettingsScreen()),
+  GoRoute(path: '/contact-support', builder: (context, state) => const profile.ContactSupportScreen()),
+  GoRoute(path: '/reset-password-profile', builder: (context, state) => const profile.ResetPasswordScreen()),
+  GoRoute(path: '/privacy-policy', builder: (context, state) => const profile.PrivacyPolicyScreen()),
+  GoRoute(path: '/terms-of-service', builder: (context, state) => const profile.TermsOfServiceScreen()),
+  GoRoute(path: '/about-us', builder: (context, state) => const profile.AboutUsScreen()),
+  GoRoute(path: '/provider-profile-info', builder: (context, state) => const ProviderProfileInfoScreen()),
+  GoRoute(path: '/edit-personal-info', builder: (context, state) => const EditPersonalInfoScreen()),
+  GoRoute(path: '/notifications', builder: (context, state) => const NotificationScreen()),
+  GoRoute(path: '/notification-preference', builder: (context, state) => const NotificationPreferenceScreen()),
+  GoRoute(path: '/accepted-projects', builder: (context, state) => const AcceptedProjectsScreen()),
+  GoRoute(path: '/professional-reviews', builder: (context, state) => const ProfessionalReviewsScreen()),
+  GoRoute(path: '/provider-favorites', builder: (context, state) => const ProviderFavoritesScreen()),
+  GoRoute(
+    path: '/favorite-collection',
+    builder: (context, state) {
+      final extra = state.extra;
+      if (extra is FavoriteCollection) {
+        return FavoriteCollectionDetailScreen(collection: extra);
+      }
+      if (extra is Map) {
+        final collection = extra['collection'] as FavoriteCollection;
+        final isProfessional = extra['isProfessional'] as bool? ?? false;
+        return FavoriteCollectionDetailScreen(collection: collection, isProfessional: isProfessional);
+      }
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: Text('Collection not found.')),
+      );
+    },
+  ),
+  GoRoute(path: '/subscription-plans', builder: (context, state) => const SubscriptionPlansScreen()),
+  GoRoute(path: '/professional-portfolio', builder: (context, state) => const PortfolioManagementScreen()),
+  GoRoute(
+    path: '/professional-projects',
+    builder: (context, state) {
+      final extra = state.extra;
+      String? initialQuery;
+      if (extra is Map) {
+        final q = extra['q'];
+        if (q != null && q.toString().trim().isNotEmpty) {
+          initialQuery = q.toString().trim();
+        }
+      } else if (extra is String && extra.trim().isNotEmpty) {
+        initialQuery = extra.trim();
+      }
+      return ProfessionalProjectsDiscoverScreen(initialQuery: initialQuery);
+    },
+  ),
+  GoRoute(
+    path: '/create-booking',
+    builder: (context, state) {
+      final extra = state.extra as Map<String, dynamic>? ?? {};
+      return CreateBookingScreen(
+        args: CreateBookingArgs(
+          professionalId: (extra['professionalId'] ?? '').toString(),
+          professionalName: (extra['professionalName'] ?? 'Professional').toString(),
+          professionalPhoto: extra['professionalPhoto']?.toString(),
+          professionalProfession: extra['professionalProfession']?.toString(),
+        ),
+      );
+    },
+  ),
+];

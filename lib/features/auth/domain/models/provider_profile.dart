@@ -1,3 +1,5 @@
+import 'service_area_location.dart';
+
 /// Provider-specific profile data stored in Firestore (users/{uid}.providerProfile).
 class ProviderProfile {
   const ProviderProfile({
@@ -6,6 +8,7 @@ class ProviderProfile {
     required this.address,
     this.description,
     this.specialty,
+    this.categoryId,
     this.companyName,
     this.contactMail,
     this.companyAddress,
@@ -27,12 +30,13 @@ class ProviderProfile {
   final String address;
   final String? description;
   final String? specialty;
+  final int? categoryId;
   final String? companyName;
   final String? contactMail;
   final String? companyAddress;
   final String? postalCode;
   final String? siret;
-  final List<String> serviceAreas;
+  final List<ServiceAreaLocation> serviceAreas;
   final String? website;
   final String? socialInstagram;
   final String? socialFacebook;
@@ -47,20 +51,31 @@ class ProviderProfile {
       'displayName': displayName,
       'phone': phone,
       'address': address,
-      if (description != null && description!.isNotEmpty) 'description': description,
+      if (description != null && description!.isNotEmpty)
+        'description': description,
       if (specialty != null && specialty!.isNotEmpty) 'specialty': specialty,
-      if (companyName != null && companyName!.isNotEmpty) 'companyName': companyName,
-      if (contactMail != null && contactMail!.isNotEmpty) 'contactMail': contactMail,
-      if (companyAddress != null && companyAddress!.isNotEmpty) 'companyAddress': companyAddress,
-      if (postalCode != null && postalCode!.isNotEmpty) 'postalCode': postalCode,
+      if (categoryId != null && categoryId! > 0) 'categoryId': categoryId,
+      if (companyName != null && companyName!.isNotEmpty)
+        'companyName': companyName,
+      if (contactMail != null && contactMail!.isNotEmpty)
+        'contactMail': contactMail,
+      if (companyAddress != null && companyAddress!.isNotEmpty)
+        'companyAddress': companyAddress,
+      if (postalCode != null && postalCode!.isNotEmpty)
+        'postalCode': postalCode,
       if (siret != null && siret!.isNotEmpty) 'siret': siret,
-      'serviceAreas': serviceAreas,
+      'serviceAreas': serviceAreas.map((e) => e.toJson()).toList(),
       if (website != null && website!.isNotEmpty) 'website': website,
-      if (socialInstagram != null && socialInstagram!.isNotEmpty) 'socialInstagram': socialInstagram,
-      if (socialFacebook != null && socialFacebook!.isNotEmpty) 'socialFacebook': socialFacebook,
-      if (socialTwitter != null && socialTwitter!.isNotEmpty) 'socialTwitter': socialTwitter,
-      if (socialLinkedin != null && socialLinkedin!.isNotEmpty) 'socialLinkedin': socialLinkedin,
-      if (kbisExtractUrl != null && kbisExtractUrl!.isNotEmpty) 'kbisExtractUrl': kbisExtractUrl,
+      if (socialInstagram != null && socialInstagram!.isNotEmpty)
+        'socialInstagram': socialInstagram,
+      if (socialFacebook != null && socialFacebook!.isNotEmpty)
+        'socialFacebook': socialFacebook,
+      if (socialTwitter != null && socialTwitter!.isNotEmpty)
+        'socialTwitter': socialTwitter,
+      if (socialLinkedin != null && socialLinkedin!.isNotEmpty)
+        'socialLinkedin': socialLinkedin,
+      if (kbisExtractUrl != null && kbisExtractUrl!.isNotEmpty)
+        'kbisExtractUrl': kbisExtractUrl,
       'projectUploads': projectUploads,
       'certificateUploads': certificateUploads,
     };
@@ -81,9 +96,10 @@ class ProviderProfile {
     return {
       'username': displayName,
       'phone': phone,
-      'address': address,
+      'address': companyAddress?.isNotEmpty == true ? companyAddress! : address,
       'description': description ?? '',
       'speciality': specialty ?? '',
+      if (categoryId != null && categoryId! > 0) 'categoryId': categoryId,
       'companyName': companyName ?? '',
       'contactEmail': contactMail ?? '',
       'companyAddress': companyAddress ?? '',
@@ -92,18 +108,25 @@ class ProviderProfile {
       'kbisExtractUrl': normalizedKbis,
       'projectUploads': projectUploads,
       'certificateUploads': certificateUploads,
-      'serviceAreaCities': serviceAreas,
+      'serviceAreaCities': serviceAreas
+          .where((e) => e.isValidForApi)
+          .map((e) => e.toCompleteProfileJson())
+          .toList(),
       'websiteUrl': normalizedWebsite,
       'socialMediaLinks': socialMediaLinks,
     };
   }
 
-  static String? _normalizeUrlOrNull(String? raw, {bool requireSchemeOrWww = false}) {
+  static String? _normalizeUrlOrNull(
+    String? raw, {
+    bool requireSchemeOrWww = false,
+  }) {
     if (raw == null) return null;
     final value = raw.trim();
     if (value.isEmpty) return null;
     final lower = value.toLowerCase();
-    if (lower.startsWith('http://') || lower.startsWith('https://')) return value;
+    if (lower.startsWith('http://') || lower.startsWith('https://'))
+      return value;
     if (lower.startsWith('www.')) return 'https://$value';
     if (requireSchemeOrWww) return null;
     if (_looksLikeDomain(value)) return 'https://$value';
@@ -137,18 +160,26 @@ class ProviderProfile {
       }
     }
     return ProviderProfile(
-      displayName: map['displayName'] as String? ?? map['username'] as String? ?? '',
+      displayName:
+          map['displayName'] as String? ?? map['username'] as String? ?? '',
       phone: map['phone'] as String? ?? '',
       address: map['address'] as String? ?? '',
       description: map['description'] as String?,
       specialty: map['specialty'] as String? ?? map['speciality'] as String?,
+      categoryId: _pickPositiveInt([
+        map['categoryId'],
+        map['specialityId'],
+        map['specialtyId'],
+        (map['category'] is Map ? (map['category'] as Map)['id'] : null),
+      ]),
       companyName: map['companyName'] as String?,
-      contactMail: map['contactMail'] as String? ?? map['contactEmail'] as String?,
+      contactMail:
+          map['contactMail'] as String? ?? map['contactEmail'] as String?,
       companyAddress: map['companyAddress'] as String?,
       postalCode: map['postalCode'] as String?,
       siret: map['siret'] as String? ?? map['siretNumber'] as String?,
       serviceAreas: areas is List<dynamic>
-          ? areas.map((e) => e.toString()).toList()
+          ? areas.map((e) => ServiceAreaLocation.fromDynamic(e)).toList()
           : const [],
       website: map['website'] as String? ?? map['websiteUrl'] as String?,
       socialInstagram: map['socialInstagram'] as String? ?? sInstagram,
@@ -160,7 +191,9 @@ class ProviderProfile {
           ? (map['projectUploads'] as List).map((e) => e.toString()).toList()
           : const [],
       certificateUploads: map['certificateUploads'] is List
-          ? (map['certificateUploads'] as List).map((e) => e.toString()).toList()
+          ? (map['certificateUploads'] as List)
+                .map((e) => e.toString())
+                .toList()
           : const [],
     );
   }
@@ -171,12 +204,13 @@ class ProviderProfile {
     String? address,
     String? description,
     String? specialty,
+    int? categoryId,
     String? companyName,
     String? contactMail,
     String? companyAddress,
     String? postalCode,
     String? siret,
-    List<String>? serviceAreas,
+    List<ServiceAreaLocation>? serviceAreas,
     String? website,
     String? socialInstagram,
     String? socialFacebook,
@@ -192,6 +226,7 @@ class ProviderProfile {
       address: address ?? this.address,
       description: description ?? this.description,
       specialty: specialty ?? this.specialty,
+      categoryId: categoryId ?? this.categoryId,
       companyName: companyName ?? this.companyName,
       contactMail: contactMail ?? this.contactMail,
       companyAddress: companyAddress ?? this.companyAddress,
@@ -207,5 +242,14 @@ class ProviderProfile {
       projectUploads: projectUploads ?? this.projectUploads,
       certificateUploads: certificateUploads ?? this.certificateUploads,
     );
+  }
+
+  static int? _pickPositiveInt(List<dynamic> values) {
+    for (final value in values) {
+      if (value == null) continue;
+      final parsed = value is num ? value.toInt() : int.tryParse(value.toString());
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return null;
   }
 }

@@ -2,30 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/app_toast.dart';
 import '../../domain/favorite_collection.dart';
 import '../../domain/favorite_item.dart';
 import '../providers/favorites_provider.dart';
+import '../../../profile/presentation/providers/provider_favorites_provider.dart';
 
 /// Shows an Instagram-style bottom sheet to save a favorited item into a collection.
 /// Call after the item is already added to favorites (so [item.favoriteId] is set).
 Future<void> showSaveToCollectionSheet(
   BuildContext context, {
   required FavoriteItem item,
+  bool isProfessional = false,
 }) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _SaveToCollectionSheet(item: item),
+    builder: (_) => _SaveToCollectionSheet(item: item, isProfessional: isProfessional),
   );
 }
 
 class _SaveToCollectionSheet extends ConsumerStatefulWidget {
-  const _SaveToCollectionSheet({required this.item});
+  const _SaveToCollectionSheet({
+    required this.item,
+    this.isProfessional = false,
+  });
+
   final FavoriteItem item;
+  final bool isProfessional;
 
   @override
   ConsumerState<_SaveToCollectionSheet> createState() =>
@@ -46,10 +54,11 @@ class _SaveToCollectionSheetState
 
   @override
   Widget build(BuildContext context) {
+    final provider = widget.isProfessional ? providerFavoritesProvider : favoritesProvider;
     final collections =
-        ref.watch(favoritesProvider.select((s) => s.collections));
+        ref.watch(provider.select((s) => s.collections));
     final loading =
-        ref.watch(favoritesProvider.select((s) => s.collectionsLoading));
+        ref.watch(provider.select((s) => s.collectionsLoading));
 
     return Container(
       decoration: const BoxDecoration(
@@ -78,7 +87,7 @@ class _SaveToCollectionSheetState
             child: Row(
               children: [
                 Text(
-                  'Save to Collection',
+                  'favorites.save_to_collection'.tr(),
                   style: GoogleFonts.outfit(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -115,7 +124,7 @@ class _SaveToCollectionSheetState
             Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                'No collections yet.\nCreate one above.',
+                'favorites.no_collections_yet'.tr(),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                     fontSize: 13, color: Colors.black45, height: 1.5),
@@ -165,7 +174,7 @@ class _SaveToCollectionSheetState
             ),
             const SizedBox(width: 14),
             Text(
-              'Create new collection',
+              'favorites.create_new_collection'.tr(),
               style: GoogleFonts.outfit(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -194,7 +203,7 @@ class _SaveToCollectionSheetState
                 autofocus: true,
                 style: GoogleFonts.outfit(fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Collection name…',
+                  hintText: 'favorites.collection_name_hint'.tr(),
                   hintStyle:
                       GoogleFonts.outfit(fontSize: 14, color: Colors.black38),
                   border: InputBorder.none,
@@ -221,7 +230,7 @@ class _SaveToCollectionSheetState
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
-            child: Text('Save',
+            child: Text('common.save'.tr(),
                 style: GoogleFonts.outfit(
                     fontSize: 14, fontWeight: FontWeight.w600)),
           ),
@@ -239,7 +248,8 @@ class _SaveToCollectionSheetState
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
     FocusScope.of(context).unfocus();
-    final notifier = ref.read(favoritesProvider.notifier);
+    final provider = widget.isProfessional ? providerFavoritesProvider : favoritesProvider;
+    final notifier = ref.read(provider.notifier);
     final col = await notifier.createCollection(name);
     if (!mounted) return;
     final err = notifier.consumeError();
@@ -256,17 +266,18 @@ class _SaveToCollectionSheetState
     if (_movingToId != null) return;
     setState(() => _movingToId = col.id);
 
-    final notifier = ref.read(favoritesProvider.notifier);
+    final provider = widget.isProfessional ? providerFavoritesProvider : favoritesProvider;
+    final notifier = ref.read(provider.notifier);
     final ok = await notifier.moveToCollection(widget.item, col.id);
     if (!mounted) return;
     setState(() => _movingToId = null);
 
     if (ok) {
       Navigator.pop(context);
-      AppToast.success('Saved to "${col.name}"');
+      AppToast.success('favorites.saved_to_collection'.tr(args: [col.name]));
     } else {
       final err = notifier.consumeError();
-      AppToast.error(err ?? 'Could not save to collection.');
+      AppToast.error(err ?? 'favorites.could_not_save'.tr());
     }
   }
 }
@@ -321,7 +332,7 @@ class _CollectionTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${collection.itemCount} saved',
+                    'favorites.items_saved'.tr(args: [collection.itemCount.toString()]),
                     style: GoogleFonts.outfit(
                         fontSize: 12, color: Colors.black45),
                   ),

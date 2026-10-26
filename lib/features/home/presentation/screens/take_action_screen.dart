@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -31,34 +32,44 @@ class _TakeActionScreenState extends State<TakeActionScreen> {
 
   Future<void> _submit() async {
     if (_selected == null) {
-      AppToast.error('Please select a reason.');
+      AppToast.error(tr('take_action.error_select_reason'));
       return;
     }
 
     final args = widget.args;
     if (args == null || args.professionalId.isEmpty) {
-      AppToast.error('Could not identify who to report.');
+      AppToast.error(tr('take_action.error_identify'));
       return;
     }
 
     setState(() => _submitting = true);
     try {
-      await _ds.reportProfessional(
-        professionalId: args.professionalId,
-        reason: _selected!,
-        description: _commentController.text.trim().isNotEmpty
-            ? _commentController.text.trim()
-            : null,
-      );
+      if (args.isCurrentUserProfessional) {
+        await _ds.reportUser(
+          userId: args.professionalId,
+          reason: _selected!,
+          details: _commentController.text.trim().isNotEmpty
+              ? _commentController.text.trim()
+              : null,
+        );
+      } else {
+        await _ds.reportProfessional(
+          professionalId: args.professionalId,
+          reason: _selected!,
+          description: _commentController.text.trim().isNotEmpty
+              ? _commentController.text.trim()
+              : null,
+        );
+      }
       if (!mounted) return;
-      AppToast.success('Report submitted. Our team will review it.');
+      AppToast.success(tr('take_action.success'));
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString()
           .replaceFirst('Exception: ', '')
           .replaceFirst('ApiException: ', '');
-      AppToast.error(msg.isNotEmpty ? msg : 'Could not submit report.');
+      AppToast.error(msg.isNotEmpty ? msg : tr('take_action.error_submit'));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -71,8 +82,8 @@ class _TakeActionScreenState extends State<TakeActionScreen> {
       behavior: HitTestBehavior.translucent,
       child: Scaffold(
         backgroundColor: Colors.white,
-        appBar: const CommonAppBar(
-          title: 'Take action',
+        appBar: CommonAppBar(
+          title: tr('take_action.title'),
           showBackButton: true,
           showLogo: true,
           showNotification: false,
@@ -84,7 +95,7 @@ class _TakeActionScreenState extends State<TakeActionScreen> {
             children: [
               const SizedBox(height: 24),
               Text(
-                'Find Support or Report User',
+                tr('take_action.heading'),
                 style: GoogleFonts.outfit(
                     fontSize: 24,
                     fontWeight: FontWeight.w600,
@@ -92,14 +103,14 @@ class _TakeActionScreenState extends State<TakeActionScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Help us understanding what\'s happening',
+                tr('take_action.subheading'),
                 style:
                     GoogleFonts.outfit(fontSize: 14, color: Colors.black54),
               ),
               if (widget.args != null) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'Reporting: ${widget.args!.professionalName}',
+                  tr('take_action.reporting_label', namedArgs: {'name': widget.args!.professionalName}),
                   style: GoogleFonts.outfit(
                       fontSize: 13,
                       color: AppColors.primaryRed,
@@ -114,7 +125,7 @@ class _TakeActionScreenState extends State<TakeActionScreen> {
               _buildCommentField(),
               const SizedBox(height: 40),
               PrimaryGradientButton(
-                text: 'Submit Report',
+                text: tr('take_action.submit_button'),
                 isLoading: _submitting,
                 onPressed: _submitting ? () {} : _submit,
               ),
@@ -175,7 +186,7 @@ class _TakeActionScreenState extends State<TakeActionScreen> {
             ),
             const SizedBox(width: 14),
             Text(
-              reason.label,
+              tr(reason.translationKey),
               style: GoogleFonts.outfit(
                 fontSize: 15,
                 fontWeight:
@@ -203,7 +214,7 @@ class _TakeActionScreenState extends State<TakeActionScreen> {
         maxLines: 5,
         style: GoogleFonts.outfit(fontSize: 14, color: Colors.black87),
         decoration: InputDecoration(
-          hintText: 'Additional details (optional)…',
+          hintText: tr('take_action.additional_details_hint'),
           hintStyle:
               GoogleFonts.outfit(fontSize: 14, color: Colors.black38),
           contentPadding: const EdgeInsets.all(16),

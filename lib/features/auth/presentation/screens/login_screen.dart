@@ -1,7 +1,9 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -22,11 +24,15 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  // Web OAuth client ID from Firebase config; used as ID token audience for backend validation.
+  static const String _googleServerClientId = '30170613785-tget5is0cteckkacqmf7ofm0nbvj32b6.apps.googleusercontent.com';
+
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _rememberMe = true;
   bool _isLoading = false;
+  bool _googleInitialized = false;
 
   @override
   void dispose() {
@@ -42,14 +48,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final role = roleParam == 'provider'
         ? UserRole.provider
         : roleParam == 'client'
-            ? UserRole.client
-            : null;
+        ? UserRole.client
+        : null;
     final repo = ref.read(authRepositoryProvider);
-    final result = await repo.signInWithEmailAndPassword(
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-      role: role,
-    );
+    final result = await repo.signInWithEmailAndPassword(email: _emailController.text.trim(), password: _passwordController.text, role: role);
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (result.errorMessage != null) {
@@ -66,6 +68,67 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  UserRole? get _roleFromQuery {
+    final roleParam = GoRouterState.of(context).uri.queryParameters['role'];
+    if (roleParam == 'provider') return UserRole.provider;
+    if (roleParam == 'client') return UserRole.client;
+    return null;
+  }
+
+  String _googleErrorMessage(Object error) {
+    if (error is GoogleSignInException) {
+      final d = error.description?.trim();
+      return d == null || d.isEmpty ? 'Google sign-in failed (${error.code.name}).' : 'Google sign-in failed: $d';
+    }
+    if (error is FirebaseAuthException) {
+      final msg = error.message?.trim();
+      return msg == null || msg.isEmpty ? 'Firebase auth failed (${error.code}).' : msg;
+    }
+    if (error is UnsupportedError) {
+      return 'Google sign-in is not supported on this device/build.';
+    }
+    return 'Google sign-in failed. Please try again.';
+  }
+
+  Future<void> _signInWithGoogle() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      if (!_googleInitialized) {
+        await GoogleSignIn.instance.initialize(serverClientId: _googleServerClientId);
+        _googleInitialized = true;
+      }
+      final account = await GoogleSignIn.instance.authenticate();
+      final googleAuth = account.authentication;
+      final idToken = googleAuth.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        AppToast.error('Google sign-in failed: missing idToken.');
+        return;
+      }
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      final role = _roleFromQuery ?? UserRole.client;
+      final repo = ref.read(authRepositoryProvider);
+      final result = await repo.socialLogin(provider: 'google', idToken: idToken, role: role);
+      if (!mounted) return;
+      if (result.errorMessage != null) {
+        AppToast.error(result.errorMessage!);
+        return;
+      }
+      await ref.read(authStateNotifierProvider).refresh();
+      if (!mounted) return;
+      final user = result.user!;
+      context.go(user.isProvider ? '/provider-home' : '/home');
+    } catch (e, st) {
+      debugPrint('[Auth][Google][Login] $e\n$st');
+      if (!mounted) return;
+      AppToast.error(_googleErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -76,17 +139,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.only(top: 40.0, bottom: 20.0),
-              child: Image.asset(
-                AppAssets.logoHorizontalRed,
-                height: 45,
-                errorBuilder: (context, error, stackTrace) => Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('H/', style: TextStyle(fontFamily: 'Playfair Display', fontSize: 32, color: AppColors.primaryRed)),
-                    Text('omeCraft', style: TextStyle(fontFamily: 'Playfair Display', fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.primaryRed.withValues(alpha: 0.9))),
-                  ],
-                ),
-              ),
+              child: Image.asset(AppAssets.logoRed, height: 82, fit: BoxFit.contain),
             ),
             Expanded(
               child: Container(
@@ -100,11 +153,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: SingleChildScrollView(
                   child: Form(
                     key: _formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     child: Column(
                       children: [
-                        Text(tr('auth.login.title'), style: const TextStyle(fontFamily: 'Playfair Display', fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF7A0000))),
+                        Text(
+                          tr('auth.login.title'),
+                          style: const TextStyle(fontFamily: 'Playfair Display', fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF7A0000)),
+                        ),
                         const SizedBox(height: 8),
-                        Text(tr('auth.login.subtitle'), textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Outfit', fontSize: 16, color: AppColors.textSecondary.withValues(alpha: 0.8))),
+                        Text(
+                          tr('auth.login.subtitle'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontFamily: 'Outfit', fontSize: 16, color: AppColors.textSecondary.withValues(alpha: 0.8)),
+                        ),
                         const SizedBox(height: 30),
                         CustomTextField(
                           hintText: tr('auth.login.email'),
@@ -114,13 +175,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           validator: AuthValidators.email,
                         ),
                         const SizedBox(height: 16),
-                        CustomTextField(
-                          hintText: tr('auth.login.password'),
-                          prefixIcon: LucideIcons.key,
-                          isPassword: true,
-                          controller: _passwordController,
-                          validator: AuthValidators.password,
-                        ),
+                        CustomTextField(hintText: tr('auth.login.password'), prefixIcon: LucideIcons.key, isPassword: true, controller: _passwordController, validator: AuthValidators.password),
                         const SizedBox(height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -130,11 +185,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 SizedBox(
                                   width: 24,
                                   height: 24,
-                                  child: Checkbox(
-                                    value: _rememberMe,
-                                    onChanged: (v) => setState(() => _rememberMe = v ?? true),
-                                    activeColor: AppColors.primaryRed,
-                                  ),
+                                  child: Checkbox(value: _rememberMe, onChanged: (v) => setState(() => _rememberMe = v ?? true), activeColor: AppColors.primaryRed),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(tr('auth.login.remember_me'), style: const TextStyle(fontSize: 12)),
@@ -145,27 +196,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 final role = GoRouterState.of(context).uri.queryParameters['role'];
                                 context.push(role != null ? '/forgot-password?role=$role' : '/forgot-password');
                               },
-                              child: Text(tr('auth.login.forget_password'), style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w600, fontSize: 12)),
+                              child: Text(
+                                tr('auth.login.forget_password'),
+                                style: const TextStyle(color: AppColors.primaryRed, fontWeight: FontWeight.w600, fontSize: 12),
+                              ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 30),
-                        PrimaryGradientButton(
-                          text: tr('auth.login.button'),
-                          onPressed: () => _submit(),
-                          isLoading: _isLoading,
-                        ),
+                        PrimaryGradientButton(text: tr('auth.login.button'), onPressed: () => _submit(), isLoading: _isLoading),
                         const SizedBox(height: 30),
                         Row(
                           children: [
                             const Expanded(child: Divider()),
-                            Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text(tr('auth.login.or_sign_in'), style: const TextStyle(color: AppColors.textSecondary))),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(tr('auth.login.or_sign_in'), style: const TextStyle(color: AppColors.textSecondary)),
+                            ),
                             const Expanded(child: Divider()),
                           ],
                         ),
                         const SizedBox(height: 20),
-                        SocialButton(text: tr('auth.login.google_sign_in'), iconPath: 'google', onTap: () {}),
-                        SocialButton(text: tr('auth.login.apple_sign_in'), iconPath: 'apple', onTap: () {}),
+                        SocialButton(text: tr('auth.login.google_sign_in'), iconPath: 'google', onTap: _signInWithGoogle),
                         const SizedBox(height: 20),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -176,7 +228,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 final role = GoRouterState.of(context).uri.queryParameters['role'];
                                 context.push(role != null ? '/register?role=$role' : '/register');
                               },
-                              child: Text(tr('auth.login.register_link'), style: const TextStyle(fontFamily: 'Outfit', color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 14)),
+                              child: Text(
+                                tr('auth.login.register_link'),
+                                style: const TextStyle(fontFamily: 'Outfit', color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
                             ),
                           ],
                         ),

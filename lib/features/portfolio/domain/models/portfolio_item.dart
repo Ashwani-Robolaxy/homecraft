@@ -70,7 +70,7 @@ class PortfolioItem {
     for (final e in raw) {
       if (e is Map<String, dynamic>) {
         final p = PortfolioPhoto.fromMap(e);
-        if (p.id > 0 && p.url.isNotEmpty) list.add(p);
+        if (p.url.isNotEmpty) list.add(p);
       } else if (e is String && e.trim().isNotEmpty) {
         list.add(PortfolioPhoto(id: list.length + 1, url: e.trim()));
       }

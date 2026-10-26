@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/common_app_bar.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -28,7 +29,7 @@ class _ProviderProfileInfoScreenState extends ConsumerState<ProviderProfileInfoS
         child: Column(
           children: [
             const SizedBox(height: 16),
-            _buildProfilePicture(),
+            _buildProfilePicture(user?.profilePhotoUrl),
             const SizedBox(height: 24),
             _buildDetailsCard(displayName: displayName, email: email),
             const SizedBox(height: 32),
@@ -40,14 +41,34 @@ class _ProviderProfileInfoScreenState extends ConsumerState<ProviderProfileInfoS
     );
   }
 
-  Widget _buildProfilePicture() {
+  Widget _buildProfilePicture(String? url) {
+    final imageUrl = url?.trim();
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: AppColors.primaryRed, width: 2),
       ),
-      child: CircleAvatar(radius: 56, backgroundColor: Colors.grey[300], backgroundImage: const AssetImage('assets/images/cleaner_profile_1.png')),
+      child: hasImage
+          ? ClipOval(
+              child: Image.network(
+                imageUrl,
+                width: 112,
+                height: 112,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => CircleAvatar(
+                  radius: 56,
+                  backgroundColor: Colors.grey[300],
+                  backgroundImage: const AssetImage(AppAssets.profilePlaceholder),
+                ),
+              ),
+            )
+          : CircleAvatar(
+              radius: 56,
+              backgroundColor: Colors.grey[300],
+              backgroundImage: const AssetImage(AppAssets.profilePlaceholder),
+            ),
     );
   }
 
@@ -70,7 +91,7 @@ class _ProviderProfileInfoScreenState extends ConsumerState<ProviderProfileInfoS
                 const Icon(LucideIcons.user, size: 18, color: AppColors.primaryRed),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('Name: ${displayName.isEmpty ? '—' : displayName}', style: GoogleFonts.outfit(fontSize: 15, color: AppColors.textMain)),
+                  child: Text('${'auth.full_name'.tr()}: ${displayName.isEmpty ? '—' : displayName}', style: GoogleFonts.outfit(fontSize: 15, color: AppColors.textMain)),
                 ),
               ],
             ),
@@ -80,7 +101,7 @@ class _ProviderProfileInfoScreenState extends ConsumerState<ProviderProfileInfoS
                 const Icon(LucideIcons.mail, size: 18, color: AppColors.primaryRed),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('Email: ${email.isEmpty ? '—' : email}', style: GoogleFonts.outfit(fontSize: 15, color: AppColors.textMain)),
+                  child: Text('${'auth.email'.tr()}: ${email.isEmpty ? '—' : email}', style: GoogleFonts.outfit(fontSize: 15, color: AppColors.textMain)),
                 ),
               ],
             ),

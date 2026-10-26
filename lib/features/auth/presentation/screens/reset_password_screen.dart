@@ -36,8 +36,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     final otp = params['otp'] ?? '';
     final role = (params['role'] == 'provider') ? UserRole.provider : UserRole.client;
     final password = _newPasswordController.text;
-    if (password.length < 6) {
-      AppToast.error('Password must be at least 6 characters');
+    if (password.length < 8) {
+      AppToast.error('Password must be at least 8 characters.');
       return;
     }
     if (password != _confirmPasswordController.text) {
@@ -71,30 +71,28 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
       backgroundColor: AppColors.backgroundWhite,
       body: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(LucideIcons.chevronLeft, color: AppColors.textMain),
-                    onPressed: () => context.pop(),
-                  ),
-                  const Spacer(),
-                  Image.asset(
-                    AppAssets.logoHorizontalRed,
-                    height: 40,
-                    errorBuilder: (context, error, stackTrace) => const Text(
-                      'HomeCraft',
-                      style: TextStyle(fontFamily: 'Playfair Display', fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primaryRed),
-                    ),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 48),
-                ],
+              padding: const EdgeInsets.fromLTRB(4, 8, 8, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  icon: const Icon(LucideIcons.chevronLeft, color: AppColors.textMain),
+                  onPressed: () => context.pop(),
+                ),
               ),
             ),
-
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 20),
+              child: Center(
+                child: Image.asset(
+                  AppAssets.logoRed,
+                  height: 82,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(30),

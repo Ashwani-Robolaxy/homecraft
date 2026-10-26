@@ -3,13 +3,39 @@ import 'package:flutter/widgets.dart';
 
 /// Auth form validators using translated messages.
 class AuthValidators {
+  // Practical RFC-5321 email regex:
+  //  • Local part: alphanumeric + . _ % + - (no leading/trailing/consecutive dots)
+  //  • Domain: alphanumeric + hyphens, separated by dots (no consecutive dots)
+  //  • TLD: letters only, 2+ chars
+  static final _emailRegex = RegExp(
+    r'^(?!.*\.\.)(?!\.)(?!.*\.$)'   // no consecutive or leading/trailing dots
+    r'[a-zA-Z0-9._%+\-]+'           // local part
+    r'@'
+    r'(?!-)[a-zA-Z0-9\-]+'          // domain label (no leading hyphen)
+    r'(\.[a-zA-Z0-9\-]+)*'          // optional subdomains
+    r'\.[a-zA-Z]{2,}$',             // TLD: letters only, 2+ chars
+  );
+
+  static const _validTlds = <String>{
+    'com',
+    'fr',
+    'org',
+    'net',
+    'archi',
+  };
+
   static String? email(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'auth.validation.email_required'.tr();
     }
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(value.trim())) {
+    final trimmed = value.trim();
+    if (!_emailRegex.hasMatch(trimmed)) {
       return 'auth.validation.email_invalid'.tr();
+    }
+    // Extract the TLD and validate it
+    final tld = trimmed.split('.').last.toLowerCase();
+    if (!_validTlds.contains(tld)) {
+      return 'Only .com .fr .org .net .archi';
     }
     return null;
   }
@@ -18,7 +44,7 @@ class AuthValidators {
     if (value == null || value.isEmpty) {
       return 'auth.validation.password_required'.tr();
     }
-    if (value.length < 6) {
+    if (value.length < 8) {
       return 'auth.validation.password_min'.tr();
     }
     return null;
@@ -29,6 +55,15 @@ class AuthValidators {
     if (err != null) return err;
     if (password == null || value != password) {
       return 'auth.validation.password_confirm'.tr();
+    }
+    return null;
+  }
+
+  static String? confirmEmail(String? value, String? email) {
+    final err = AuthValidators.email(value);
+    if (err != null) return err;
+    if (email == null || value!.trim() != email.trim()) {
+      return 'auth.validation.email_confirm'.tr();
     }
     return null;
   }

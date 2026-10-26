@@ -29,7 +29,7 @@ class ServiceDetailsScreen extends StatelessWidget {
                       height: 280,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        image: DecorationImage(image: AssetImage(AppAssets.cleanerProfile1), fit: BoxFit.cover),
+                        image: DecorationImage(image: AssetImage(AppAssets.profilePlaceholder), fit: BoxFit.cover),
                       ),
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -38,7 +38,7 @@ class ServiceDetailsScreen extends StatelessWidget {
                     ),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(15),
-                      child: Image.asset(AppAssets.cleanerProfile1, height: 200, width: 160, fit: BoxFit.cover),
+                      child: Image.asset(AppAssets.profilePlaceholder, height: 200, width: 160, fit: BoxFit.cover),
                     ),
                   ],
                 ),
@@ -79,13 +79,6 @@ class ServiceDetailsScreen extends StatelessWidget {
                           const Text(
                             'David Jues',
                             style: TextStyle(fontFamily: 'Outfit', fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF4A0000)),
-                          ),
-                          const SizedBox(width: 12),
-                          const Icon(LucideIcons.star, color: Colors.amber, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            '4.9 (2.3k Review)',
-                            style: TextStyle(fontFamily: 'Outfit', fontSize: 13, color: AppColors.textSecondary.withValues(alpha: 0.8)),
                           ),
                         ],
                       ),

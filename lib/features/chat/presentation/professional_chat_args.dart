@@ -5,6 +5,8 @@ class ProfessionalChatArgs {
     this.projectId,
     this.isCurrentUserProfessional = true,
     this.professionalId,
+    this.clientImageUrl,
+    this.clientProfession,
   });
 
   /// The OTHER person's user-ID.
@@ -21,6 +23,8 @@ class ProfessionalChatArgs {
   /// The professional's userId — used to fetch their portfolio in the Media screen.
   /// When [isCurrentUserProfessional] is false, this is the same as [clientUserId].
   final String? professionalId;
+  final String? clientImageUrl;
+  final String? clientProfession;
 
   /// Resolves the professional's ID for portfolio fetching.
   String? get resolvedProfessionalId =>

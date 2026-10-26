@@ -258,7 +258,7 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'This thread is closed. You cannot send new messages until admin reopens it.',
+              'support.thread_closed_banner'.tr(),
               style: GoogleFonts.outfit(
                 fontSize: 12,
                 color: Colors.orange.shade800,
@@ -305,7 +305,7 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
             TextButton.icon(
               onPressed: _bootstrap,
               icon: const Icon(LucideIcons.refreshCw, size: 16),
-              label: const Text('Retry'),
+              label: Text('common.retry'.tr()),
               style: TextButton.styleFrom(
                   foregroundColor: AppColors.primaryRed),
             ),
@@ -317,38 +317,39 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
 
   Widget _buildEmpty() {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: AppColors.primaryRed.withOpacity(0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(LucideIcons.headphones,
-                  size: 32, color: AppColors.primaryRed),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.primaryRed.withOpacity(0.08),
+              shape: BoxShape.circle,
             ),
-            const SizedBox(height: 16),
-            Text(
-              'How can we help?',
-              style: GoogleFonts.outfit(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Send us a message and our support team will respond as soon as possible.',
+            child: const Icon(LucideIcons.headphones,
+                size: 32, color: AppColors.primaryRed),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'support.how_can_help'.tr(),
+            maxLines: 1,
+            style: GoogleFonts.outfit(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'support.send_msg_hint'.tr(),
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                   fontSize: 13, color: Colors.black45, height: 1.5),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -382,9 +383,9 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
 
     String label;
     if (diff == 0) {
-      label = 'Today';
+      label = 'chat.today'.tr();
     } else if (diff == 1) {
-      label = 'Yesterday';
+      label = 'chat.yesterday'.tr();
     } else {
       label = DateFormat('MMM d, yyyy').format(date);
     }
@@ -424,7 +425,7 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
             Padding(
               padding: const EdgeInsets.only(bottom: 2, left: 4),
               child: Text(
-                'Support',
+                'support.support_label'.tr(),
                 style: GoogleFonts.outfit(
                     fontSize: 11,
                     color: Colors.black45,
@@ -485,15 +486,19 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
   Widget _buildInputBar() {
     final isClosed = _threadStatus == 'closed';
     final enabled = !_loading && !isClosed && !_sendBusy;
+    // Inset only inside the bar so the composer stays white edge-to-edge (no gray gap below).
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 4 + bottomInset),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 10,
-              offset: const Offset(0, -2))
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
         ],
       ),
       child: Row(
@@ -522,10 +527,10 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
                 style: GoogleFonts.outfit(fontSize: 14, color: Colors.black87),
                 decoration: InputDecoration(
                   hintText: isClosed
-                      ? 'Thread closed by admin…'
-                      : 'Type a message…',
-                  hintStyle: GoogleFonts.outfit(
-                      color: Colors.black38, fontSize: 14),
+                      ? 'support.thread_closed_hint'.tr()
+                      : 'chat.type_message'.tr(),
+                  hintStyle:
+                      GoogleFonts.outfit(color: Colors.black38, fontSize: 14),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -534,31 +539,43 @@ class _ContactSupportScreenState extends ConsumerState<ContactSupportScreen> {
                   focusedErrorBorder: InputBorder.none,
                   filled: false,
                   contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 10),
-          GestureDetector(
-            onTap: enabled ? _send : null,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: enabled
-                    ? AppColors.primaryRed
-                    : Colors.grey.shade300,
-                shape: BoxShape.circle,
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: enabled ? _send : null,
+              customBorder: const CircleBorder(),
+              child: Ink(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: enabled ? AppColors.primaryRed : Colors.grey.shade300,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: _sendBusy
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(
+                          LucideIcons.send,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                ),
               ),
-              child: _sendBusy
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(LucideIcons.send,
-                      color: Colors.white, size: 20),
             ),
           ),
         ],

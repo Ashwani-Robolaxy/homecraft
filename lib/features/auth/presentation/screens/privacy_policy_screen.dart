@@ -1,23 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/common_app_bar.dart';
 import '../../../content/presentation/providers/content_provider.dart';
 
-import '../../../../core/widgets/common_app_bar.dart';
-
-class PrivacyPolicyScreen extends ConsumerStatefulWidget {
+class PrivacyPolicyScreen extends ConsumerWidget {
   const PrivacyPolicyScreen({super.key});
 
   @override
-  ConsumerState<PrivacyPolicyScreen> createState() => _PrivacyPolicyScreenState();
-}
-
-class _PrivacyPolicyScreenState extends ConsumerState<PrivacyPolicyScreen> {
-  bool _isAgreed = false;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final privacy = ref.watch(privacyProvider);
     return Scaffold(
       backgroundColor: AppColors.backgroundWhite,
@@ -27,7 +19,7 @@ class _PrivacyPolicyScreenState extends ConsumerState<PrivacyPolicyScreen> {
           const SizedBox(height: 20),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 25),
+              padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -51,10 +43,12 @@ class _PrivacyPolicyScreenState extends ConsumerState<PrivacyPolicyScreen> {
                             data.content,
                             style: const TextStyle(fontFamily: 'Outfit', fontSize: 14, height: 1.6, color: AppColors.textSecondary),
                           ),
-                          loading: () => const Center(child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: CircularProgressIndicator(color: AppColors.primaryRed),
-                          )),
+                          loading: () => const Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 24),
+                              child: CircularProgressIndicator(color: AppColors.primaryRed),
+                            ),
+                          ),
                           error: (_, __) => const Text(
                             'Unable to load privacy policy right now.',
                             style: TextStyle(fontFamily: 'Outfit', fontSize: 14, height: 1.6, color: AppColors.textSecondary),
@@ -63,31 +57,6 @@ class _PrivacyPolicyScreenState extends ConsumerState<PrivacyPolicyScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 30),
-                  Row(
-                    children: [
-                      Transform.scale(
-                        scale: 1.2,
-                        child: Checkbox(
-                          value: _isAgreed,
-                          activeColor: AppColors.primaryRed,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                          onChanged: (value) {
-                            setState(() {
-                              _isAgreed = value ?? false;
-                            });
-                          },
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          tr('auth.legal.agree_text'),
-                          style: TextStyle(fontFamily: 'Outfit', fontSize: 14, color: AppColors.textMain.withValues(alpha: 0.8)),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
                 ],
               ),
             ),

@@ -1,0 +1,340 @@
+--- lib/features/home/presentation/screens/professional_results_screen.dart
++++ lib/features/home/presentation/screens/professional_results_screen.dart
+@@ -1,4 +1,5 @@
+ import 'dart:math' as math;
++import 'dart:async';
+ import 'package:easy_localization/easy_localization.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter/foundation.dart';
+@@ -15,11 +16,12 @@
+ import '../../../../core/widgets/app_shimmer.dart';
+ import '../../../../core/services/google_places_service.dart';
+ import '../../../../features/auth/domain/models/service_area_location.dart';
++import '../../../projects/domain/models/project_category.dart';
++import '../../../projects/presentation/providers/project_provider.dart';
+ import '../../../professionals/presentation/providers/recommended_professionals_provider.dart';
+ import '../../../professionals/domain/models/professional_listing.dart';
+ import '../widgets/recommendation_card.dart';
+-import '../widgets/filter_drawer.dart';
+ 
+ class ProfessionalResultsScreen extends ConsumerStatefulWidget {
+   const ProfessionalResultsScreen({super.key, this.initialTab = 0});
+@@ -48,6 +50,9 @@
+ 
+   // Custom marker
+   BitmapDescriptor? _customMarker;
+   late final BitmapDescriptor _fallbackMarker = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
++
++  List<ProjectCategory> _categories = [];
++  bool _loadingCategories = false;
+ 
+   @override
+   void initState() {
+@@ -62,6 +67,7 @@
+     _determinePosition();
+     _mapSearchController.addListener(_onMapSearchChanged);
+     WidgetsBinding.instance.addPostFrameCallback((_) => _loadMarkerBitmap());
++    _loadCategories();
+   }
+ 
+   @override
+@@ -75,6 +81,21 @@
+     super.dispose();
+   }
+ 
++  Future<void> _loadCategories() async {
++    setState(() => _loadingCategories = true);
++    try {
++      final list = await ref.read(projectRepositoryProvider).getCategories();
++      if (!mounted) return;
++      setState(() {
++        _categories = list;
++        _loadingCategories = false;
++      });
++    } catch (_) {
++      if (!mounted) return;
++      setState(() => _loadingCategories = false);
++    }
++  }
++
+   void _submitListSearch() {
+     final next = ref.read(professionalSearchFiltersProvider).copyWith(query: _listSearchController.text.trim());
+@@ -219,13 +240,163 @@
+     return markers;
+   }
+ 
++  void _openFilters() {
++    final currentFilters = ref.read(professionalSearchFiltersProvider);
++    var tempCategoryId = currentFilters.categoryId;
++    var tempCity = currentFilters.location;
++    var r = currentFilters.maxDistanceKm;
++    
++    String cityQuery = '';
++    List<PlaceAutocompleteSuggestion> citySuggestions = [];
++    Timer? cityDebounce;
++
++    showModalBottomSheet<void>(
++      context: context,
++      isScrollControlled: true,
++      shape: const RoundedRectangleBorder(
++        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
++      ),
++      builder: (ctx) {
++        return StatefulBuilder(
++          builder: (ctx, setModal) {
++            return Container(
++              constraints: BoxConstraints(
++                maxHeight: MediaQuery.of(ctx).size.height * 0.8,
++              ),
++              child: Padding(
++              padding: EdgeInsets.only(
++                left: 20,
++                right: 20,
++                top: 16,
++                bottom: MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.paddingOf(ctx).bottom + 20,
++              ),
++              child: SingleChildScrollView(
++                child: Column(
++                  mainAxisSize: MainAxisSize.min,
++                  crossAxisAlignment: CrossAxisAlignment.stretch,
++                  children: [
++                    Row(
++                      children: [
++                        IconButton(
++                          icon: const Icon(LucideIcons.x, color: AppColors.primaryRed),
++                          onPressed: () => Navigator.pop(ctx),
++                        ),
++                        Expanded(
++                          child: Text(
++                            'provider.projects.filter_title'.tr(),
++                            textAlign: TextAlign.center,
++                            style: GoogleFonts.outfit(
++                              fontSize: 18,
++                              fontWeight: FontWeight.w600,
++                            ),
++                          ),
++                        ),
++                        const SizedBox(width: 48),
++                      ],
++                    ),
++                    const SizedBox(height: 16),
++                    Text(
++                      'provider.projects.filter_category'.tr(),
++                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
++                    ),
++                    const SizedBox(height: 8),
++                    if (_loadingCategories)
++                      const Center(child: CircularProgressIndicator(color: AppColors.primaryRed))
++                    else if (_categories.isEmpty)
++                      Text('No categories available', style: GoogleFonts.outfit(color: AppColors.textSecondary))
++                    else
++                      Wrap(
++                        spacing: 8,
++                        runSpacing: 4,
++                        children: _categories.map((cat) {
++                          final isSelected = tempCategoryId == cat.id;
++                          return FilterChip(
++                            selected: isSelected,
++                            label: Text(cat.name, style: GoogleFonts.outfit(fontSize: 12)),
++                            onSelected: (selected) {
++                              setModal(() {
++                                if (selected) {
++                                  tempCategoryId = cat.id;
++                                } else {
++                                  tempCategoryId = null;
++                                }
++                              });
++                            },
++                            selectedColor: AppColors.primaryRed.withValues(alpha: 0.15),
++                            checkmarkColor: AppColors.primaryRed,
++                          );
++                        }).toList(),
++                      ),
++                    const SizedBox(height: 20),
++                    Text(
++                      'provider.projects.filter_cities'.tr(),
++                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
++                    ),
++                    const SizedBox(height: 8),
++                    if (tempCity.isNotEmpty) ...[
++                      Wrap(
++                        spacing: 8,
++                        runSpacing: 4,
++                        children: [
++                          Chip(
++                            label: Text(tempCity, style: GoogleFonts.outfit(fontSize: 12)),
++                            onDeleted: () {
++                              setModal(() {
++                                tempCity = '';
++                              });
++                            },
++                            deleteIcon: const Icon(LucideIcons.x, size: 14),
++                            backgroundColor: AppColors.primaryRed.withValues(alpha: 0.1),
++                            shape: RoundedRectangleBorder(
++                              borderRadius: BorderRadius.circular(20),
++                              side: BorderSide(color: AppColors.primaryRed.withValues(alpha: 0.2)),
++                            ),
++                          )
++                        ],
++                      ),
++                      const SizedBox(height: 8),
++                    ],
++                    TextField(
++                      decoration: InputDecoration(
++                        hintText: 'provider.projects.search_city_hint'.tr(),
++                        prefixIcon: const Icon(LucideIcons.search, size: 18),
++                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
++                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
++                      ),
++                      onChanged: (val) {
++                        cityQuery = val.trim();
++                        cityDebounce?.cancel();
++                        if (cityQuery.length < 2) {
++                          setModal(() {
++                            citySuggestions = [];
++                          });
++                          return;
++                        }
++                        cityDebounce = Timer(const Duration(milliseconds: 350), () async {
++                          try {
++                            final suggestions = await _places.autocomplete(cityQuery, types: '(cities)');
++                            setModal(() {
++                              citySuggestions = suggestions;
++                            });
++                          } catch (_) {}
++                        });
++                      },
++                    ),
++                    if (citySuggestions.isNotEmpty)
++                      Container(
++                        margin: const EdgeInsets.only(top: 4),
++                        decoration: BoxDecoration(
++                          color: Colors.white,
++                          borderRadius: BorderRadius.circular(12),
++                          border: Border.all(color: AppColors.borderLight),
++                        ),
++                        child: ListView.builder(
++                          shrinkWrap: true,
++                          physics: const NeverScrollableScrollPhysics(),
++                          itemCount: citySuggestions.length > 5 ? 5 : citySuggestions.length,
++                          itemBuilder: (context, index) {
++                            final s = citySuggestions[index];
++                            final cityName = s.description.split(',').first.trim();
++                            return ListTile(
++                              dense: true,
++                              leading: const Icon(LucideIcons.mapPin, size: 14, color: AppColors.primaryRed),
++                              title: Text(s.description, style: GoogleFonts.outfit(fontSize: 13)),
++                              onTap: () {
++                                setModal(() {
++                                  tempCity = cityName;
++                                  citySuggestions = [];
++                                });
++                              },
++                            );
++                          },
++                        ),
++                      ),
++                    const SizedBox(height: 20),
++                    Text(
++                      'provider.projects.radius_km'.tr(),
++                      style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
++                    ),
++                    Slider(
++                      value: r.clamp(1, 500),
++                      min: 1,
++                      max: 500,
++                      divisions: 499,
++                      activeColor: AppColors.primaryRed,
++                      label: '${r.round()} km',
++                      onChanged: (v) => setModal(() => r = v),
++                    ),
++                    Text(
++                      'provider.projects.max_radius_label'
++                          .tr(namedArgs: {'km': '${r.round()}'}),
++                      style: GoogleFonts.outfit(
++                        fontSize: 13,
++                        color: AppColors.textSecondary,
++                      ),
++                    ),
++                    const SizedBox(height: 20),
++                    ElevatedButton(
++                      onPressed: () {
++                        final next = currentFilters.copyWith(
++                          categoryId: tempCategoryId,
++                          clearCategory: tempCategoryId == null,
++                          location: tempCity,
++                          maxDistanceKm: r,
++                        );
++                        ref.read(professionalSearchFiltersProvider.notifier).set(next);
++                        ref.invalidate(recommendedProfessionalsProvider);
++                        Navigator.pop(ctx);
++                        if (_tabController.index != 1) {
++                          _tabController.animateTo(1);
++                        }
++                      },
++                      style: ElevatedButton.styleFrom(
++                        backgroundColor: AppColors.primaryRed,
++                        foregroundColor: Colors.white,
++                        padding: const EdgeInsets.symmetric(vertical: 14),
++                        shape: RoundedRectangleBorder(
++                          borderRadius: BorderRadius.circular(12),
++                        ),
++                      ),
++                      child: Text(
++                        'filter.see_results'.tr(),
++                        style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
++                      ),
++                    ),
++                    TextButton(
++                      onPressed: () {
++                        final next = currentFilters.copyWith(
++                          clearCategory: true,
++                          location: '',
++                          maxDistanceKm: 500,
++                        );
++                        ref.read(professionalSearchFiltersProvider.notifier).set(next);
++                        ref.invalidate(recommendedProfessionalsProvider);
++                        Navigator.pop(ctx);
++                      },
++                      child: Text(
++                        'provider.projects.clear_filters'.tr(),
++                        style: GoogleFonts.outfit(color: AppColors.textSecondary),
++                      ),
++                    ),
++                  ],
++                ),
++                ),
++              ),
++            );
++          },
++        );
++      },
++    );
++  }
++
+   // ── Build ─────────────────────────────────────────────────────────────────────
+ 
+   @override
+@@ -236,7 +407,6 @@
+ 
+     return Scaffold(
+       backgroundColor: Colors.white,
+-      endDrawer: const FilterDrawer(),
+       appBar: AppBar(
+         backgroundColor: Colors.white,
+         elevation: 0,
+@@ -250,11 +420,9 @@
+         ),
+         centerTitle: true,
+         actions: [
+-          Builder(
+-            builder: (ctx) => IconButton(
+-              icon: const Icon(LucideIcons.slidersHorizontal, color: AppColors.primaryRed),
+-              onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+-            ),
++          IconButton(
++            icon: const Icon(LucideIcons.slidersHorizontal, color: AppColors.primaryRed),
++            onPressed: _openFilters,
+           ),
+           const SizedBox(width: 8),
+         ],

@@ -68,6 +68,24 @@ class ChatRemoteDatasource {
     }
   }
 
+  /// Delete a conversation by ID.
+  /// DELETE /users/chat/conversations/{conversationId} OR
+  /// DELETE /professionals/chat/conversations/{conversationId}
+  Future<void> deleteConversation(
+    int conversationId, {
+    required bool isCurrentUserProfessional,
+  }) async {
+    final token = await _requireToken();
+    final base = isCurrentUserProfessional
+        ? '/professionals/chat/conversations'
+        : '/users/chat/conversations';
+
+    await _api.delete(
+      '$base/$conversationId',
+      token: token,
+    );
+  }
+
   // ── Conversation list ────────────────────────────────────────────────────
 
   /// List all conversations for the current user.

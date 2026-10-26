@@ -1,26 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
-  bool _profileHideOn = true;
-  bool _isDarkMode = false;
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _deleting = false;
+
+  Future<void> _deleteAccount() async {
+    setState(() => _deleting = true);
+    final error = await ref.read(authRepositoryProvider).deleteAccount();
+    if (!mounted) return;
+    setState(() => _deleting = false);
+    if (error != null) {
+      AppToast.error(error);
+      return;
+    }
+    context.go('/login');
+  }
 
   void _showDeleteAccountDialog() {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
+      builder: (dialogContext) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -38,30 +53,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: GoogleFonts.outfit(fontSize: 16, color: Colors.black54),
               ),
               const SizedBox(height: 32),
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        side: const BorderSide(color: AppColors.primaryRed),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                      ),
-                      child: Text(
-                        'settings.cancel'.tr(),
-                        style: GoogleFonts.outfit(color: AppColors.primaryRed, fontWeight: FontWeight.w600),
-                      ),
-                    ),
+                  PrimaryGradientButton(
+                    text: 'settings.delete'.tr(),
+                    isLoading: _deleting,
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                      _deleteAccount();
+                    },
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: PrimaryGradientButton(
-                      text: 'settings.delete'.tr(),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        context.go('/splash');
-                      },
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: _deleting ? null : () => Navigator.pop(dialogContext),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: const BorderSide(color: AppColors.primaryRed),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    child: Text(
+                      'settings.cancel'.tr(),
+                      style: GoogleFonts.outfit(color: AppColors.primaryRed, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -76,41 +89,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          // Background Texture
-          Container(
-            decoration: const BoxDecoration(
-              image: DecorationImage(image: AssetImage('assets/images/texture_bg.jpg'), fit: BoxFit.cover),
-            ),
-            child: Container(color: Colors.black.withValues(alpha: 0.8)),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                _buildAppBar(context),
-                const SizedBox(height: 40),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      _buildSettingsItem(icon: LucideIcons.lock, title: 'settings.change_password'.tr(), onTap: () => context.push('/reset-password-profile')),
-                      const SizedBox(height: 16),
-                      _buildProfileHideItem(),
-                      const SizedBox(height: 16),
-                      _buildModeItem(),
-                      const SizedBox(height: 16),
-                      _buildLanguageItem(),
-                      const SizedBox(height: 16),
-                      _buildSettingsItem(icon: LucideIcons.trash2, title: 'settings.delete_account'.tr(), onTap: _showDeleteAccountDialog),
-                    ],
+      backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: false,
+      body: SizedBox.expand(
+        child: Stack(
+          children: [
+            Positioned.fill(child: Image.asset(AppAssets.subscriptionBackground, fit: BoxFit.cover)),
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.black.withValues(alpha: 0.62), Colors.black.withValues(alpha: 0.35), AppColors.primaryRed.withValues(alpha: 0.22)],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+            Positioned.fill(child: Container(color: Colors.black.withValues(alpha: 0.18))),
+            SafeArea(
+              child: Column(
+                children: [
+                  _buildAppBar(context),
+                  const SizedBox(height: 40),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        _buildSettingsItem(icon: LucideIcons.lock, title: 'settings.change_password'.tr(), onTap: () => context.push('/reset-password-profile')),
+                        const SizedBox(height: 16),
+                        _buildLanguageItem(),
+                        const SizedBox(height: 16),
+                        _buildSettingsItem(icon: LucideIcons.trash2, title: 'settings.delete_account'.tr(), onTap: _showDeleteAccountDialog),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -156,54 +174,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildProfileHideItem() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          const Icon(LucideIcons.eyeOff, color: AppColors.primaryRed, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'settings.profile_hide'.tr(),
-              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black),
-            ),
-          ),
-          Switch(
-            value: _profileHideOn,
-            onChanged: (v) => setState(() => _profileHideOn = v),
-            activeColor: AppColors.primaryRed,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModeItem() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          Icon(_isDarkMode ? LucideIcons.moon : LucideIcons.sun, color: AppColors.primaryRed, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'settings.mode'.tr(),
-              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black),
-            ),
-          ),
-          Switch(
-            value: _isDarkMode,
-            onChanged: (v) => setState(() => _isDarkMode = v),
-            activeColor: AppColors.primaryRed,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildLanguageItem() {
     final isFrench = context.locale.languageCode == 'fr';
     return Container(
@@ -213,26 +183,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           const Icon(LucideIcons.languages, color: AppColors.primaryRed, size: 20),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'settings.language'.tr(),
-              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black),
-            ),
-          ),
           Text(
-            isFrench ? 'settings.french'.tr() : 'settings.english'.tr(),
-            style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary),
+            'settings.language'.tr(),
+            style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
+          const Spacer(),
           SegmentedButton<String>(
             segments: [
-              ButtonSegment(value: 'en', label: Text('EN', style: GoogleFonts.outfit(fontSize: 12))),
-              ButtonSegment(value: 'fr', label: Text('FR', style: GoogleFonts.outfit(fontSize: 12))),
+              ButtonSegment(
+                value: 'en',
+                label: Text('EN', style: GoogleFonts.outfit(fontSize: 12)),
+              ),
+              ButtonSegment(
+                value: 'fr',
+                label: Text('FR', style: GoogleFonts.outfit(fontSize: 12)),
+              ),
             ],
             selected: {isFrench ? 'fr' : 'en'},
             onSelectionChanged: (Set<String> selected) {
               final code = selected.first;
+              if (code == (isFrench ? 'fr' : 'en')) return; // already selected
               context.setLocale(Locale(code));
+              // Navigate to root so every cached screen rebuilds with the new locale
+              context.go('/splash');
             },
             style: ButtonStyle(
               padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),

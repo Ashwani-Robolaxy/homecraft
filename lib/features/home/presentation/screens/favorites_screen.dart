@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/app_shimmer.dart';
 import '../../../favorites/domain/favorite_collection.dart';
 import '../../../favorites/domain/favorite_item.dart';
@@ -181,7 +184,7 @@ class _FavoritesBody extends ConsumerWidget {
             TextButton.icon(
               onPressed: onRetry,
               icon: const Icon(LucideIcons.refreshCw, size: 16),
-              label: const Text('Retry'),
+              label: Text('common.retry'.tr()),
               style:
                   TextButton.styleFrom(foregroundColor: AppColors.primaryRed),
             ),
@@ -209,14 +212,14 @@ class _FavoritesBody extends ConsumerWidget {
                   size: 36, color: AppColors.primaryRed),
             ),
             const SizedBox(height: 20),
-            Text('No Favorites Yet',
+            Text('favorites.empty_title'.tr(),
                 style: GoogleFonts.outfit(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87)),
             const SizedBox(height: 8),
             Text(
-              'Tap the ♥ on a professional or project to save it here.',
+              'favorites.empty_body'.tr(),
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                   fontSize: 13, color: Colors.black45, height: 1.5),
@@ -238,7 +241,7 @@ class _FavoritesBody extends ConsumerWidget {
           if (state.collections.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text('Collections',
+              child: Text('favorites.collections'.tr(),
                   style: GoogleFonts.outfit(
                       fontSize: 20,
                       fontWeight: FontWeight.w500,
@@ -247,26 +250,9 @@ class _FavoritesBody extends ConsumerWidget {
             const SizedBox(height: 14),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _buildCollectionGrid(context, state.collections),
+              child: _buildCollectionGrid(context, ref, state.collections),
             ),
             const SizedBox(height: 28),
-          ],
-
-          // ── All saved items ─────────────────────────────────────────────
-          if (state.items.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text('Saved (${state.items.length})',
-                  style: GoogleFonts.outfit(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textMain)),
-            ),
-            const SizedBox(height: 14),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _buildItemsGrid(context, ref, state.items),
-            ),
           ],
         ],
       ),
@@ -274,24 +260,18 @@ class _FavoritesBody extends ConsumerWidget {
   }
 
   Widget _buildCollectionGrid(
-      BuildContext context, List<FavoriteCollection> collections) {
-    final List<Widget> rows = [];
-    for (int i = 0; i < collections.length; i += 2) {
-      final left = collections[i];
-      final right = i + 1 < collections.length ? collections[i + 1] : null;
-      rows.add(Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _CollectionCard(collection: left)),
-          const SizedBox(width: 16),
-          right != null
-              ? Expanded(child: _CollectionCard(collection: right))
-              : const Expanded(child: SizedBox()),
-        ],
-      ));
-      rows.add(const SizedBox(height: 20));
-    }
-    return Column(children: rows);
+      BuildContext context, WidgetRef ref, List<FavoriteCollection> collections) {
+    return Column(
+      children: collections.map((c) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: _CollectionCard(
+          collection: c,
+          onTap: () => context.push('/favorite-collection', extra: c),
+          onRename: () => _showRenameCollectionDialog(context, ref, c),
+          onDelete: () => _confirmDeleteCollection(context, ref, c),
+        ),
+      )).toList(),
+    );
   }
 
   Widget _buildItemsGrid(
@@ -313,6 +293,119 @@ class _FavoritesBody extends ConsumerWidget {
       rows.add(const SizedBox(height: 20));
     }
     return Column(children: rows);
+  }
+
+  Future<void> _showRenameCollectionDialog(
+    BuildContext context,
+    WidgetRef ref,
+    FavoriteCollection collection,
+  ) async {
+    final controller = TextEditingController(text: collection.name);
+    final next = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('Rename collection', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 20, color: Colors.black)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          cursorColor: AppColors.primaryRed,
+          style: GoogleFonts.outfit(fontSize: 15, color: Colors.black87),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            hintText: 'Collection name',
+            hintStyle: GoogleFonts.outfit(color: Colors.black54, fontSize: 14),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primaryRed, width: 1.5),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primaryRed, width: 1.5),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.of(ctx).pop();
+            }, 
+            child: Text('Cancel', style: GoogleFonts.outfit(color: const Color(0xFF8B79A1), fontWeight: FontWeight.w500)),
+          ),
+          TextButton(
+            onPressed: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.of(ctx).pop(controller.text.trim());
+            },
+            child: Text('Save', style: GoogleFonts.outfit(color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    // Delay disposal to allow the dialog pop animation to complete safely
+    Future.delayed(const Duration(milliseconds: 400), () {
+      controller.dispose();
+    });
+    final name = (next ?? '').trim();
+    if (name.isEmpty || name == collection.name) return;
+    final ok = await ref.read(favoritesProvider.notifier).renameCollection(collection.id, name);
+    if (!context.mounted) return;
+    if (ok) {
+      AppToast.success('Collection renamed');
+    } else {
+      final err = ref.read(favoritesProvider.notifier).consumeError();
+      AppToast.error(err ?? 'Could not rename collection.');
+    }
+  }
+
+  Future<void> _confirmDeleteCollection(
+    BuildContext context,
+    WidgetRef ref,
+    FavoriteCollection collection,
+  ) async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('favorites.delete_collection_title'.tr(), style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 20, color: Colors.black)),
+        content: Text(
+          'favorites.delete_collection_desc'.tr(namedArgs: {'name': collection.name}),
+          style: GoogleFonts.outfit(height: 1.4, fontSize: 15, color: Colors.black87),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.of(ctx).pop(false);
+            }, 
+            child: Text('common.cancel'.tr(), style: GoogleFonts.outfit(color: const Color(0xFF8B79A1), fontWeight: FontWeight.w500)),
+          ),
+          TextButton(
+            onPressed: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.of(ctx).pop(true);
+            },
+            child: Text('common.delete'.tr(), style: GoogleFonts.outfit(color: AppColors.primaryRed, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    if (sure != true) return;
+    final ok = await ref.read(favoritesProvider.notifier).deleteCollection(collection.id);
+    if (!context.mounted) return;
+    if (ok) {
+      AppToast.success('favorites.collection_deleted'.tr());
+    } else {
+      final err = ref.read(favoritesProvider.notifier).consumeError();
+      AppToast.error(err ?? 'Could not delete collection.');
+    }
   }
 }
 
@@ -350,25 +443,30 @@ class _FavCard extends ConsumerWidget {
               ),
             ),
             // Type badge
-            Positioned(
-              top: 10,
-              left: 10,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.55),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  item.type == FavoriteType.professional ? 'Pro' : 'Project',
-                  style: GoogleFonts.outfit(
-                      fontSize: 10,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600),
+            if (item.type != FavoriteType.professional || item.isPro)
+              Positioned(
+                top: 10,
+                left: 10,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.55),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    item.type == FavoriteType.professional
+                        ? 'Pro'
+                        : item.type == FavoriteType.user
+                            ? 'Client'
+                            : 'Project',
+                    style: GoogleFonts.outfit(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
-            ),
             // Remove heart button
             Positioned(
               top: 8,
@@ -425,15 +523,20 @@ class _FavCard extends ConsumerWidget {
   }
 
   Widget _placeholder() {
+    if (item.type == FavoriteType.professional ||
+        item.type == FavoriteType.user) {
+      return Image.asset(
+        AppAssets.profilePlaceholder,
+        fit: BoxFit.cover,
+      );
+    }
     return Container(
       color: Colors.grey.shade200,
-      child: Center(
+      child: const Center(
         child: Icon(
-          item.type == FavoriteType.professional
-              ? LucideIcons.user
-              : LucideIcons.clipboardList,
+          LucideIcons.clipboardList,
           size: 40,
-          color: Colors.grey.shade400,
+          color: Colors.black26,
         ),
       ),
     );
@@ -443,70 +546,85 @@ class _FavCard extends ConsumerWidget {
 // ── Collection card ───────────────────────────────────────────────────────────
 
 class _CollectionCard extends StatelessWidget {
-  const _CollectionCard({required this.collection});
+  const _CollectionCard({
+    required this.collection,
+    required this.onTap,
+    required this.onRename,
+    required this.onDelete,
+  });
   final FavoriteCollection collection;
+  final VoidCallback onTap;
+  final VoidCallback onRename;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final images = collection.coverImages;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AspectRatio(
-          aspectRatio: 1,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              color: Colors.grey.shade100,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: images.length >= 4
-                ? GridView.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 2,
-                    crossAxisSpacing: 2,
-                    padding: EdgeInsets.zero,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: images
-                        .take(4)
-                        .map((url) => Image.network(url,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _placeholder()))
-                        .toList(),
-                  )
-                : images.isNotEmpty
-                    ? Image.network(images.first,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _placeholder())
-                    : _placeholder(),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(LucideIcons.layoutGrid,
+                    size: 20, color: Colors.black38),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      collection.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textMain),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${collection.itemCount} saved',
+                      style: GoogleFonts.outfit(
+                          fontSize: 13, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'delete') onDelete();
+                },
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(
+                      value: 'delete', child: Text('favorites.delete_collection_menu'.tr())),
+                ],
+                icon: const Icon(
+                  LucideIcons.moreHorizontal,
+                  size: 18,
+                  color: AppColors.textMain,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 10),
-        Text(
-          collection.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.outfit(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textMain),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          '${collection.itemCount} saved',
-          style: GoogleFonts.outfit(
-              fontSize: 13, color: AppColors.textSecondary),
-        ),
-      ],
+      ),
     );
   }
-
-  Widget _placeholder() => Container(
-        color: Colors.grey.shade200,
-        child: const Center(
-          child: Icon(LucideIcons.layoutGrid, size: 32, color: Colors.black26),
-        ),
-      );
 }
 
 // ── Hero header (unchanged) ───────────────────────────────────────────────────

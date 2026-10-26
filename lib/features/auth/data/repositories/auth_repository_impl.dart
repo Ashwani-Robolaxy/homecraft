@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../domain/models/app_user.dart';
 import '../../domain/models/provider_profile.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -64,6 +66,11 @@ class AuthRepositoryImpl implements AuthRepository {
       await _ds.sendForgotPassword(email: email, role: role);
       return null;
     } on ApiException catch (e) {
+      // A 5xx from the forgot-password endpoint almost always means the
+      // server's email/SMTP service is misconfigured — not a user error.
+      if (e.statusCode != null && e.statusCode! >= 500) {
+        return 'Email service is temporarily unavailable. Please try again later.';
+      }
       return _friendlyError(e.message);
     } catch (_) {
       return 'Network error. Check your connection.';
@@ -125,17 +132,42 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<AuthResult> updateProfile({
     required String displayName,
+    String? username,
     String? phone,
     String? city,
   }) async {
     try {
-      await _ds.updateBasicProfile(displayName: displayName, phone: phone, city: city);
-      final appUser = await _ds.getCurrentUser();
-      return (user: appUser, errorMessage: null);
+      await _ds.updateBasicProfile(displayName: displayName, username: username, phone: phone, city: city);
+      return (user: _ds.currentUser, errorMessage: null);
     } on ApiException catch (e) {
       return (user: null, errorMessage: _friendlyError(e.message));
     } catch (_) {
       return (user: null, errorMessage: 'Network error. Check your connection.');
+    }
+  }
+
+  @override
+  Future<AuthResult> updateClientProfilePhoto(
+    String filePath, {
+    required String displayName,
+    String? username,
+    String? phone,
+    String? city,
+  }) async {
+    try {
+      await _ds.uploadClientProfilePhoto(
+        filePath,
+        displayName: displayName,
+        username: username,
+        phone: phone,
+        city: city,
+      );
+      return (user: _ds.currentUser, errorMessage: null);
+    } on ApiException catch (e) {
+      return (user: null, errorMessage: _friendlyError(e.message));
+    } catch (e) {
+      debugPrint('[AuthRepository] updateClientProfilePhoto failed: $e');
+      return (user: null, errorMessage: _friendlyError(e.toString()));
     }
   }
 
@@ -153,8 +185,51 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<AuthResult> updateProviderProfilePhoto(String filePath) async {
+    try {
+      await _ds.uploadProviderProfilePhoto(filePath);
+      return (user: _ds.currentUser, errorMessage: null);
+    } on ApiException catch (e) {
+      return (user: null, errorMessage: _friendlyError(e.message));
+    } catch (e) {
+      debugPrint('[AuthRepository] updateProviderProfilePhoto failed: $e');
+      return (user: null, errorMessage: _friendlyError(e.toString()));
+    }
+  }
+
+  @override
   Future<AppUser?> getCurrentUser() async {
     return _ds.getCurrentUser();
+  }
+
+  @override
+  Future<String?> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await _ds.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+      return null;
+    } on ApiException catch (e) {
+      return _friendlyError(e.message);
+    } catch (_) {
+      return 'Network error. Check your connection.';
+    }
+  }
+
+  @override
+  Future<String?> deleteAccount() async {
+    try {
+      await _ds.deleteAccount();
+      return null;
+    } on ApiException catch (e) {
+      return _friendlyError(e.message);
+    } catch (_) {
+      return 'Network error. Check your connection.';
+    }
   }
 
   String _friendlyError(String raw) {
@@ -162,13 +237,24 @@ class AuthRepositoryImpl implements AuthRepository {
     final lower = msg.toLowerCase();
     if (lower.contains('invalid login: 535') ||
         lower.contains('badcredentials') ||
-        lower.contains('smtp')) {
-      return 'Reset email service is temporarily unavailable. Please try again later.';
+        lower.contains('smtp') ||
+        lower.contains('5.7.8') ||
+        lower.contains('username and password not accepted') ||
+        lower.contains('mail') && lower.contains('not accepted')) {
+      return 'Email service is temporarily unavailable. Please try again later.';
     }
     // MySQL: Table 'service_backend.professionals' doesn't exist (quotes in message).
     if (lower.contains('service_backend.professionals') &&
         (lower.contains("doesn't exist") || lower.contains('does not exist'))) {
       return 'Professional accounts are temporarily unavailable. Please try again later or contact support.';
+    }
+    if (lower.contains('missingpluginexception')) {
+      return 'Image upload service is not ready yet. Please fully restart the app and try again.';
+    }
+    if (lower.contains('network error') ||
+        lower.contains('socketexception') ||
+        lower.contains('connection')) {
+      return 'Network error. Check your connection.';
     }
     return msg;
   }

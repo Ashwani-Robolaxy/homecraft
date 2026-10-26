@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_assets.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
@@ -28,6 +29,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final headerHeight = size.height * 0.48;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundWhite,
@@ -39,7 +42,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             left: 0,
             right: 0,
             child: Container(
-              height: size.height * 0.52,
+              height: headerHeight,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -47,10 +50,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   colors: [AppColors.lightPrimary, AppColors.primaryRed, AppColors.darkPrimary],
                   stops: [0.0, 0.5, 1.0],
                 ),
-                borderRadius: BorderRadius.only(bottomLeft: Radius.elliptical(400, 180), bottomRight: Radius.elliptical(400, 180)),
+                borderRadius: BorderRadius.only(bottomLeft: Radius.elliptical(400, 150), bottomRight: Radius.elliptical(400, 150)),
               ),
               child: ClipRRect(
-                borderRadius: const BorderRadius.only(bottomLeft: Radius.elliptical(400, 180), bottomRight: Radius.elliptical(400, 180)),
+                borderRadius: const BorderRadius.only(bottomLeft: Radius.elliptical(400, 150), bottomRight: Radius.elliptical(400, 150)),
                 child: Stack(
                   children: [
                     // Decorative Circles
@@ -65,74 +68,89 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ),
           ),
-          // Main Content
-          SafeArea(
-            child: Column(
-              children: [
-                // Header (Logo Image - Horizontal White)
-                Padding(
-                  padding: const EdgeInsets.only(top: 20.0),
-                  child: Image.asset(
-                    AppAssets.logoWhite,
-                    height: 50,
-                    errorBuilder: (context, error, stackTrace) => Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          'H/',
-                          style: TextStyle(fontFamily: 'Playfair Display', fontSize: 32, color: AppColors.textWhite),
-                        ),
-                        Text(
-                          'omeCraft',
-                          style: TextStyle(fontFamily: 'Playfair Display', fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textWhite.withValues(alpha: 0.9)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
 
-                // Center Circle Logo Overlay
-                SizedBox(height: size.height * 0.05),
-                Container(
-                  width: 200,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryRed,
-                    shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 15, offset: const Offset(0, 8))],
-                  ),
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.all(40), // Added padding for the logo
-                  child: Image.asset(
-                    AppAssets.logo,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Text(
-                        'H/',
-                        style: TextStyle(fontFamily: 'Playfair Display', fontSize: 80, fontWeight: FontWeight.bold, color: AppColors.textWhite),
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 48),
-
-                // White Card Context Area
-                Expanded(
+          // Static Logo centered inside the red header
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: SizedBox(
+                height: headerHeight - topPadding,
+                child: Center(
                   child: Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.symmetric(horizontal: 0),
-                    child: PageView(
-                      controller: _pageController,
-                      children: [
-                        // Page 1
-                        _buildPage1(context),
-                        // Page 2
-                        _buildPage2(context),
-                      ],
+                    width: 180,
+                    height: 180,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryRed,
+                      shape: BoxShape.circle,
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 15, offset: const Offset(0, 8))],
+                    ),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(35),
+                    child: Image.asset(
+                      AppAssets.logo,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Text(
+                          'H/',
+                          style: GoogleFonts.playfairDisplay(fontSize: 75, fontWeight: FontWeight.bold, color: AppColors.textWhite),
+                        );
+                      },
                     ),
                   ),
                 ),
-              ],
+              ),
+            ),
+          ),
+
+          // PageView for Onboarding Pages (positioned below the red header to avoid overlap)
+          Positioned(
+            top: headerHeight,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: PageView(
+                controller: _pageController,
+                children: [
+                  // Page 1
+                  _buildPage1(context),
+                  // Page 2
+                  _buildPage2(context),
+                ],
+              ),
+            ),
+          ),
+
+          // Language Selector
+          Positioned(
+            bottom: 10,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              top: false,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      context.setLocale(const Locale('en'));
+                    },
+                    style: TextButton.styleFrom(foregroundColor: context.locale.languageCode == 'en' ? AppColors.primaryRed : AppColors.textSecondary),
+                    child: Text('English', style: GoogleFonts.outfit(fontWeight: context.locale.languageCode == 'en' ? FontWeight.bold : FontWeight.normal)),
+                  ),
+                  Text('|', style: GoogleFonts.outfit(color: AppColors.textSecondary.withValues(alpha: 0.5))),
+                  TextButton(
+                    onPressed: () {
+                      context.setLocale(const Locale('fr'));
+                    },
+                    style: TextButton.styleFrom(foregroundColor: context.locale.languageCode == 'fr' ? AppColors.primaryRed : AppColors.textSecondary),
+                    child: Text('Français', style: GoogleFonts.outfit(fontWeight: context.locale.languageCode == 'fr' ? FontWeight.bold : FontWeight.normal)),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -149,13 +167,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           Text(
             tr('onboarding.title'),
             textAlign: TextAlign.center,
-            style: const TextStyle(fontFamily: 'Outfit', fontSize: 32, fontWeight: FontWeight.w300, color: AppColors.textMain),
+            style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.w300, color: AppColors.textMain, height: 1.25),
           ),
           const SizedBox(height: 24),
           Text(
             tr('onboarding.subtitle'),
             textAlign: TextAlign.center,
-            style: const TextStyle(fontFamily: 'Outfit', fontSize: 15, color: AppColors.textSecondary, height: 1.5, fontWeight: FontWeight.w300),
+            style: GoogleFonts.outfit(fontSize: 15, color: AppColors.textSecondary, height: 1.5, fontWeight: FontWeight.w300),
           ),
           const SizedBox(height: 48),
           PrimaryGradientButton(
@@ -172,22 +190,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Widget _buildPage2(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 30.0),
+      padding: const EdgeInsets.symmetric(horizontal: 12.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             tr('onboarding.role_title'),
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: AppColors.textMain),
+            style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w400, color: AppColors.textMain, height: 1.3),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
             tr('onboarding.role_subtitle'),
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primaryRed),
+            style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.primaryRed, letterSpacing: 0.2),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 32),
 
           // Role Selection - Client
           _buildRoleButton(
@@ -241,17 +259,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget _buildRoleButton({required BuildContext context, required String title, required IconData icon, required bool isSelected, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(50),
+      borderRadius: BorderRadius.circular(24),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
         decoration: BoxDecoration(
           color: isSelected ? null : Colors.white,
           gradient: isSelected ? const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [AppColors.buttonGradientTop, AppColors.buttonGradientBottom]) : null,
-          borderRadius: BorderRadius.circular(50),
-          border: isSelected ? null : Border.all(color: AppColors.primaryRed.withValues(alpha: 0.3)),
-          boxShadow: [if (isSelected) BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))],
+          borderRadius: BorderRadius.circular(24),
+          border: isSelected ? null : Border.all(color: AppColors.primaryRed.withValues(alpha: 0.15)),
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(color: AppColors.primaryRed.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 6))
+            else
+              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          ],
         ),
         child: Row(
           children: [
@@ -261,11 +284,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               decoration: BoxDecoration(shape: BoxShape.circle, color: isSelected ? Colors.white : AppColors.primaryRed),
               child: Icon(icon, color: isSelected ? AppColors.primaryRed : Colors.white, size: 24),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             Expanded(
               child: Text(
                 title,
-                style: TextStyle(color: isSelected ? Colors.white : AppColors.textMain, fontSize: 18, fontWeight: FontWeight.w600, fontFamily: 'Outfit'),
+                style: GoogleFonts.outfit(color: isSelected ? Colors.white : AppColors.textMain, fontSize: 18, fontWeight: FontWeight.w500),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_assets.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -9,6 +10,12 @@ class SocialButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const SocialButton({super.key, required this.text, required this.iconPath, required this.onTap});
+
+  String _resolveText(String value) {
+    if (!value.contains('.')) return value;
+    final translated = value.tr();
+    return translated == value ? value : translated;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +39,7 @@ class SocialButton extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Text(
-              text,
+              _resolveText(text),
               style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 16),
             ),
           ],

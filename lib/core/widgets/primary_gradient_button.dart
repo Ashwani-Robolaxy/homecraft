@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../../../../core/constants/app_colors.dart';
 
 class PrimaryGradientButton extends StatelessWidget {
@@ -9,15 +10,13 @@ class PrimaryGradientButton extends StatelessWidget {
   final IconData? icon;
   final bool isLoading;
 
-  const PrimaryGradientButton({
-    super.key,
-    required this.text,
-    required this.onPressed,
-    this.width,
-    this.height = 56,
-    this.icon,
-    this.isLoading = false,
-  });
+  const PrimaryGradientButton({super.key, required this.text, required this.onPressed, this.width, this.height = 56, this.icon, this.isLoading = false});
+
+  String _resolveText(String value) {
+    if (!value.contains('.')) return value;
+    final translated = value.tr();
+    return translated == value ? value : translated;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,22 +38,20 @@ class PrimaryGradientButton extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(height / 2)),
         ),
         child: isLoading
-            ? SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
+            ? SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: const AlwaysStoppedAnimation<Color>(Colors.white)))
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (icon != null) ...[Icon(icon, color: Colors.white, size: 20), const SizedBox(width: 8)],
-                  Text(
-                    text,
-                    style: const TextStyle(fontFamily: 'Outfit', fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _resolveText(text),
+                        style: const TextStyle(fontFamily: 'Outfit', fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
+                      ),
+                    ),
                   ),
                 ],
               ),

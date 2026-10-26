@@ -6,11 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_config.dart';
 import '../../../../core/widgets/common_app_bar.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../notifications/presentation/providers/notification_providers.dart';
 import '../../../chat/data/chat_remote_datasource.dart';
 import '../../../chat/presentation/professional_chat_args.dart';
+import '../../../../core/storage/session_storage.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Screen
@@ -25,6 +29,7 @@ class MessageScreen extends ConsumerStatefulWidget {
 
 class _MessageScreenState extends ConsumerState<MessageScreen> {
   final _ds = ChatRemoteDatasource();
+  final _session = SessionStorage();
   List<_ConvItem> _conversations = [];
   bool _loading = true;
   bool _hasError = false;
@@ -44,8 +49,22 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
       final raw =
           await _ds.listConversations(isCurrentUserProfessional: _isPro);
       if (!mounted) return;
+      
+      final parsed = raw.map((m) => _ConvItem.fromMap(m, isPro: _isPro)).toList();
+      
+      final List<_ConvItem> filtered = [];
+      for (final item in parsed) {
+        final deleteTime = await _session.getConversationDeleteTimeByUserId(item.otherUserId);
+        if (deleteTime != null) {
+          if (item.lastMessageTime == null || item.lastMessageTime!.isBefore(deleteTime)) {
+            continue;
+          }
+        }
+        filtered.add(item);
+      }
+
       setState(() {
-        _conversations = raw.map((m) => _ConvItem.fromMap(m, isPro: _isPro)).toList();
+        _conversations = filtered;
         _loading = false;
       });
     } catch (_) {
@@ -61,12 +80,20 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
         clientUserId: item.otherUserId,
         clientDisplayName: item.otherName,
         isCurrentUserProfessional: _isPro,
+        clientImageUrl: item.otherPhoto,
+        clientProfession: item.otherRole,
       ),
-    );
+    ).then((_) {
+      if (mounted) {
+        _loadConversations();
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final unreadAsync = ref.watch(unreadNotificationCountProvider);
+    final unread = unreadAsync.when<int>(data: (c) => c, loading: () => 0, error: (_, __) => 0);
     return Scaffold(
       backgroundColor: const Color(0xFFFDF9F9),
       appBar: CommonAppBar(
@@ -74,11 +101,19 @@ class _MessageScreenState extends ConsumerState<MessageScreen> {
         showBackButton: false,
         showLogo: true,
         showNotification: true,
-        notificationCount: 1,
+        notificationCount: unread,
+        onNotificationTap: () {
+          context.push('/notifications').then((_) {
+            ref.invalidate(unreadNotificationCountProvider);
+          });
+        },
       ),
       body: RefreshIndicator(
         color: AppColors.primaryRed,
-        onRefresh: _loadConversations,
+        onRefresh: () async {
+          await _loadConversations();
+          ref.invalidate(unreadNotificationCountProvider);
+        },
         child: _loading
             ? _MessageShimmer()
             : _hasError
@@ -169,14 +204,30 @@ class _ConvItem {
         .toString()
         .trim();
 
-    final photo = (other['profilePhoto'] ?? other['profilePhotoUrl'] ??
-            other['avatar'] ?? other['photo'] ?? other['image'] ??
-            m['profilePhoto'] ?? m['profilePhotoUrl'] ?? '')
+    final photoRaw = (other['imageUrl'] ??
+            other['profilePhoto'] ??
+            other['profilePhotoUrl'] ??
+            other['avatar'] ??
+            other['photo'] ??
+            other['image'] ??
+            m['imageUrl'] ??
+            m['profilePhoto'] ??
+            m['profilePhotoUrl'] ??
+            '')
         .toString()
         .trim();
+    final photo = _abs(photoRaw);
 
-    final profession = (other['profession'] ?? other['specialty'] ??
-            other['category'] ?? other['role'] ?? other['jobTitle'] ??
+    final profession = (other['speciality'] ??
+            other['specialty'] ??
+            other['profession'] ??
+            other['companyName'] ??
+            other['category'] ??
+            other['role'] ??
+            other['jobTitle'] ??
+            m['speciality'] ??
+            m['specialty'] ??
+            m['profession'] ??
             (isPro ? 'Client' : 'Professional'))
         .toString()
         .trim();
@@ -246,6 +297,15 @@ class _ConvItem {
     return m;
   }
 
+  static String _abs(String raw) {
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    final base = ApiConfig.baseUrl.endsWith('/')
+        ? ApiConfig.baseUrl.substring(0, ApiConfig.baseUrl.length - 1)
+        : ApiConfig.baseUrl;
+    return '$base${raw.startsWith('/') ? raw : '/$raw'}';
+  }
+
   String get relativeTime {
     if (lastMessageTime == null) return '';
     final diff = DateTime.now().difference(lastMessageTime!);
@@ -261,7 +321,7 @@ class _ConvItem {
 // Conversation card
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _MessageCard extends StatefulWidget {
+class _MessageCard extends StatelessWidget {
   const _MessageCard({
     required this.item,
     required this.isPro,
@@ -273,39 +333,7 @@ class _MessageCard extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_MessageCard> createState() => _MessageCardState();
-}
-
-class _MessageCardState extends State<_MessageCard>
-    with SingleTickerProviderStateMixin {
-  bool _expanded = false;
-  late final AnimationController _ctrl;
-  late final Animation<double> _expandAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 220));
-    _expandAnim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  void _toggleExpand() {
-    setState(() => _expanded = !_expanded);
-    _expanded ? _ctrl.forward() : _ctrl.reverse();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final item = widget.item;
-    final hasMessage = item.lastMessageText.isNotEmpty;
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -328,7 +356,7 @@ class _MessageCardState extends State<_MessageCard>
             children: [
               // Main tap card
               GestureDetector(
-                onTap: widget.onTap,
+                onTap: onTap,
                 child: Container(
                   margin: const EdgeInsets.only(right: 20),
                   padding:
@@ -359,7 +387,7 @@ class _MessageCardState extends State<_MessageCard>
                               text: TextSpan(
                                 children: [
                                   TextSpan(
-                                    text: 'Name: ',
+                                    text: 'provider.messages.name_prefix'.tr(),
                                     style: GoogleFonts.outfit(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
@@ -377,7 +405,7 @@ class _MessageCardState extends State<_MessageCard>
                                 ],
                               ),
                             ),
-                            if (item.otherRole.isNotEmpty) ...[
+                            if (!isPro && item.otherRole.isNotEmpty) ...[
                               const SizedBox(height: 5),
                               // "Profession: Plumber"
                               RichText(
@@ -386,7 +414,7 @@ class _MessageCardState extends State<_MessageCard>
                                 text: TextSpan(
                                   children: [
                                     TextSpan(
-                                      text: 'Profession: ',
+                                      text: 'provider.messages.profession_prefix'.tr(),
                                       style: GoogleFonts.outfit(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600,
@@ -416,87 +444,19 @@ class _MessageCardState extends State<_MessageCard>
 
                       const SizedBox(width: 10),
 
-                      // ── Time + chevron ───────────────────────────────────
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            item.relativeTime,
-                            style: GoogleFonts.outfit(
-                              fontSize: 11,
-                              color: Colors.black45,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          GestureDetector(
-                            onTap: hasMessage ? _toggleExpand : null,
-                            behavior: HitTestBehavior.opaque,
-                            child: AnimatedRotation(
-                              turns: _expanded ? 0.5 : 0,
-                              duration: const Duration(milliseconds: 220),
-                              child: Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                size: 22,
-                                color: hasMessage
-                                    ? Colors.black54
-                                    : Colors.black12,
-                              ),
-                            ),
-                          ),
-                        ],
+                      // ── Time ─────────────────────────────────────────────
+                      Text(
+                        item.relativeTime,
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: Colors.black45,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-
-              // ── Expandable last-message row ─────────────────────────────
-              if (hasMessage)
-                SizeTransition(
-                  sizeFactor: _expandAnim,
-                  axisAlignment: -1,
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 20, top: 4),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'Last Messages : ',
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          TextSpan(
-                            text: item.lastMessageText,
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.black54,
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
 
               const SizedBox(height: 16),
             ],
@@ -522,7 +482,7 @@ class _Thumbnail extends StatelessWidget {
       child: SizedBox(
         width: 72,
         height: 56,
-        child: (url != null && url!.startsWith('http'))
+        child: (url != null && url!.trim().isNotEmpty)
             ? Image.network(
                 url!,
                 fit: BoxFit.cover,
@@ -533,11 +493,9 @@ class _Thumbnail extends StatelessWidget {
     );
   }
 
-  Widget _placeholder() => Container(
-        color: const Color(0xFFE8D5D5),
-        child: const Center(
-          child: Icon(Icons.person, size: 28, color: AppColors.primaryRed),
-        ),
+  Widget _placeholder() => Image.asset(
+        AppAssets.profilePlaceholder,
+        fit: BoxFit.cover,
       );
 }
 
@@ -562,8 +520,8 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               isPro
-                  ? 'No client conversations yet.\nClients will appear here once they message you.'
-                  : 'No conversations yet.\nMessage a professional to get started.',
+                  ? 'provider.messages.empty_pro'.tr()
+                  : 'provider.messages.empty_client'.tr(),
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                   fontSize: 14, color: Colors.black54, height: 1.5),
@@ -590,7 +548,7 @@ class _ErrorState extends StatelessWidget {
             Icon(Icons.wifi_off_rounded, size: 56, color: Colors.black26),
             const SizedBox(height: 16),
             Text(
-              'Could not load messages.\nCheck your connection and try again.',
+              'provider.messages.load_error'.tr(),
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(fontSize: 14, color: Colors.black54, height: 1.5),
             ),
@@ -598,7 +556,7 @@ class _ErrorState extends StatelessWidget {
             TextButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Retry'),
+              label: Text('common.retry'.tr()),
               style: TextButton.styleFrom(foregroundColor: AppColors.primaryRed),
             ),
           ],

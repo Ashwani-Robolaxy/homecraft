@@ -20,6 +20,7 @@ class ProjectFilterOverlay extends StatefulWidget {
 class _ProjectFilterOverlayState extends State<ProjectFilterOverlay> {
   double _distance = 4.0;
   double _budget = 56.0;
+  bool _isBudgetEnabled = false;
 
   @override
   Widget build(BuildContext context) {
@@ -95,12 +96,23 @@ class _ProjectFilterOverlayState extends State<ProjectFilterOverlay> {
                     ),
                   ),
                   const SizedBox(height: 30),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Maximum Budget (€)',
-                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Minimum Budget (€)',
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black87),
+                      ),
+                      Switch(
+                        value: _isBudgetEnabled,
+                        onChanged: (val) {
+                          setState(() {
+                            _isBudgetEnabled = val;
+                          });
+                        },
+                        activeColor: AppColors.primaryRed,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 15),
                   Stack(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,7 +22,43 @@ class OtpVerificationScreen extends ConsumerStatefulWidget {
 
 class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   String _otp = '';
-  bool _isLoading = false;
+  final bool _isLoading = false;
+  bool _isResending = false;
+
+  // Resend cooldown — 60 seconds after the initial OTP send.
+  static const int _cooldownSeconds = 60;
+  int _secondsLeft = _cooldownSeconds;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCooldown();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _startCooldown() {
+    _timer?.cancel();
+    setState(() => _secondsLeft = _cooldownSeconds);
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() {
+        if (_secondsLeft > 0) {
+          _secondsLeft--;
+        } else {
+          t.cancel();
+        }
+      });
+    });
+  }
 
   String _maskEmail(String email) {
     final parts = email.split('@');
@@ -35,33 +73,41 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
     final email = params['email'] ?? '';
     final role = (params['role'] == 'provider') ? UserRole.provider : UserRole.client;
     if (email.isEmpty || _otp.length != 6) {
-      AppToast.error('Please enter a valid 6-digit OTP');
+      AppToast.error('auth.verify_otp.invalid_otp'.tr());
       return;
     }
-    setState(() => _isLoading = true);
-    final error = await ref.read(authRepositoryProvider).verifyResetOtp(
-          email: email,
-          otp: _otp,
-          role: role,
-        );
+
+    // Bypass the intermediate verify API call because the backend route is missing.
+    // The OTP will be verified securely by the backend during the final reset-password step.
+    final roleValue = role == UserRole.provider ? 'provider' : 'client';
+    context.push('/reset-password?email=${Uri.encodeComponent(email)}&otp=$_otp&role=$roleValue');
+  }
+
+  Future<void> _resendOtp() async {
+    if (_secondsLeft > 0 || _isResending) return;
+    final params = GoRouterState.of(context).uri.queryParameters;
+    final email = params['email'] ?? '';
+    final role = (params['role'] == 'provider') ? UserRole.provider : UserRole.client;
+    if (email.isEmpty) return;
+
+    setState(() => _isResending = true);
+    final error = await ref.read(authRepositoryProvider).sendPasswordResetEmail(email, role: role);
     if (!mounted) return;
-    setState(() => _isLoading = false);
+    setState(() => _isResending = false);
+
     if (error != null) {
       AppToast.error(error);
-      return;
+    } else {
+      AppToast.success('auth.verify_otp.resent_success'.tr());
+      _startCooldown();
     }
-    final roleValue = role == UserRole.provider ? 'provider' : 'client';
-    context.push(
-      '/reset-password?email=${Uri.encodeComponent(email)}&otp=$_otp&role=$roleValue',
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final email = GoRouterState.of(context).uri.queryParameters['email'] ?? '';
-    final subtitle = email.isEmpty
-        ? tr('auth.verify_otp.subtitle')
-        : 'We have sent an OTP code to your email\n${_maskEmail(email)}.';
+    final subtitle = email.isEmpty ? tr('auth.verify_otp.subtitle') : tr('auth.verify_otp.sent_to', namedArgs: {'email': _maskEmail(email)});
+
     final defaultPinTheme = PinTheme(
       width: 50,
       height: 60,
@@ -72,39 +118,32 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
         border: Border.all(color: Colors.black.withValues(alpha: 0.1)),
       ),
     );
-
     final focusedPinTheme = defaultPinTheme.copyWith(
       decoration: defaultPinTheme.decoration!.copyWith(border: Border.all(color: AppColors.primaryRed)),
     );
+
+    final canResend = _secondsLeft == 0 && !_isResending;
 
     return Scaffold(
       backgroundColor: AppColors.backgroundWhite,
       body: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(LucideIcons.chevronLeft, color: AppColors.textMain),
-                    onPressed: () => context.pop(),
-                  ),
-                  const Spacer(),
-                  Image.asset(
-                    AppAssets.logoHorizontalRed,
-                    height: 40,
-                    errorBuilder: (context, error, stackTrace) => const Text(
-                      'HomeCraft',
-                      style: TextStyle(fontFamily: 'Playfair Display', fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primaryRed),
-                    ),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 48),
-                ],
+              padding: const EdgeInsets.fromLTRB(4, 8, 8, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  icon: const Icon(LucideIcons.chevronLeft, color: AppColors.textMain),
+                  onPressed: () => context.pop(),
+                ),
               ),
             ),
-
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 20),
+              child: Center(child: Image.asset(AppAssets.logoRed, height: 82, fit: BoxFit.contain)),
+            ),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(30),
@@ -132,36 +171,40 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
                             style: TextStyle(fontFamily: 'Outfit', fontSize: 14, color: AppColors.textSecondary.withValues(alpha: 0.8)),
                           ),
                           const SizedBox(height: 30),
-                          Pinput(
-                            length: 6,
-                            defaultPinTheme: defaultPinTheme,
-                            focusedPinTheme: focusedPinTheme,
-                            onChanged: (pin) => _otp = pin,
-                            onCompleted: (pin) => _otp = pin,
-                          ),
+                          Pinput(length: 6, defaultPinTheme: defaultPinTheme, focusedPinTheme: focusedPinTheme, onChanged: (pin) => _otp = pin, onCompleted: (pin) => _otp = pin),
                           const SizedBox(height: 30),
-                          Row(
+                          Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(tr('auth.verify_otp.resend_prefix'), style: const TextStyle(fontFamily: 'Outfit', fontSize: 13)),
-                              TextButton(
-                                onPressed: () {},
-                                child: Text(
-                                  tr('auth.verify_otp.resend_link'),
-                                  style: const TextStyle(fontFamily: 'Outfit', color: AppColors.primaryRed, fontWeight: FontWeight.bold, fontSize: 13, decoration: TextDecoration.underline),
-                                ),
-                              ),
+                              const SizedBox(height: 4),
+                              _isResending
+                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryRed))
+                                  : TextButton(
+                                      onPressed: canResend ? _resendOtp : null,
+                                      style: TextButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: const Size(0, 0),
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: Text(
+                                        canResend ? tr('auth.verify_otp.resend_link') : tr('auth.verify_otp.resend_in', namedArgs: {'seconds': '$_secondsLeft'}),
+                                        style: TextStyle(
+                                          fontFamily: 'Outfit',
+                                          color: canResend ? AppColors.primaryRed : AppColors.textSecondary,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                          decoration: canResend ? TextDecoration.underline : TextDecoration.none,
+                                        ),
+                                      ),
+                                    ),
                             ],
                           ),
                         ],
                       ),
                     ),
                     const Spacer(),
-                    PrimaryGradientButton(
-                      text: tr('auth.verify_otp.verify'),
-                      onPressed: _verifyOtp,
-                      isLoading: _isLoading,
-                    ),
+                    PrimaryGradientButton(text: tr('auth.verify_otp.verify'), onPressed: _verifyOtp, isLoading: _isLoading),
                     const SizedBox(height: 20),
                   ],
                 ),

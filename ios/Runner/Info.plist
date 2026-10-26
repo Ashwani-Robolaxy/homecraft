@@ -4,6 +4,11 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>fr</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Homecraft</string>
 	<key>CFBundleExecutable</key>
@@ -45,6 +50,17 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Homecraft needs access to your photo library to let you upload photos for your projects and portfolio.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Homecraft needs permission to save photos to your photo library.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Homecraft needs access to your camera to take photos for your projects and portfolio.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs access to location when open to show your current position on the map.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -56,5 +72,16 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.30170613785-276oruaak9j0v27rhfmlo1jhauab3ncq</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

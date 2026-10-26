@@ -34,11 +34,34 @@ abstract class AuthRepository {
   Future<void> signOut();
 
   /// Update basic profile fields.
-  Future<AuthResult> updateProfile({required String displayName, String? phone, String? city});
+  Future<AuthResult> updateProfile({required String displayName, String? username, String? phone, String? city});
+
+  /// Client: multipart **PUT** `/users/me/profile` (firstName/lastName/phone + `profileImage` file).
+  Future<AuthResult> updateClientProfilePhoto(
+    String filePath, {
+    required String displayName,
+    String? username,
+    String? phone,
+    String? city,
+  });
+
+  /// Professional: multipart upload using Swagger update profile endpoint.
+  Future<AuthResult> updateProviderProfilePhoto(String filePath);
 
   /// Update full provider profile (profile setup). Use for provider role only.
   Future<AuthResult> updateProviderProfile(ProviderProfile profile);
 
   /// Fetch current user from API/session for refresh.
   Future<AppUser?> getCurrentUser();
+
+  /// Permanently delete the authenticated user's account and sign out.
+  /// Returns null on success or an error message string on failure.
+  Future<String?> deleteAccount();
+
+  /// Change password for local (non-social) accounts.
+  /// Returns null on success or an error message string on failure.
+  Future<String?> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  });
 }

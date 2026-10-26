@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../../../../core/constants/app_colors.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -37,6 +38,12 @@ class CustomTextField extends StatefulWidget {
 class _CustomTextFieldState extends State<CustomTextField> {
   bool _obscureText = true;
 
+  String _resolveText(String value) {
+    if (!value.contains('.')) return value;
+    final translated = value.tr();
+    return translated == value ? value : translated;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -64,7 +71,8 @@ class _CustomTextFieldState extends State<CustomTextField> {
       validator: widget.validator,
       style: const TextStyle(fontFamily: 'Outfit', fontSize: 14, color: AppColors.textMain),
       decoration: InputDecoration(
-        hintText: widget.hintText,
+        hintText: _resolveText(widget.hintText),
+        errorMaxLines: 3,
         errorStyle: const TextStyle(fontFamily: 'Outfit', fontSize: 12, color: AppColors.primaryRed),
         prefixIcon: widget.prefixText != null
             ? Container(
@@ -79,17 +87,13 @@ class _CustomTextFieldState extends State<CustomTextField> {
         suffixIcon: widget.suffixIcon != null
             ? Icon(widget.suffixIcon, color: AppColors.textSecondary, size: 20)
             : (widget.isPassword
-                ? IconButton(
-                    icon: Icon(
-                      _obscureText ? LucideIcons.eyeOff : LucideIcons.eye,
-                      color: AppColors.textSecondary,
-                      size: 20,
-                    ),
-                    onPressed: () => setState(() => _obscureText = !_obscureText),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                  )
-                : null),
+                  ? IconButton(
+                      icon: Icon(_obscureText ? LucideIcons.eyeOff : LucideIcons.eye, color: AppColors.textSecondary, size: 20),
+                      onPressed: () => setState(() => _obscureText = !_obscureText),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                    )
+                  : null),
       ),
     );
   }

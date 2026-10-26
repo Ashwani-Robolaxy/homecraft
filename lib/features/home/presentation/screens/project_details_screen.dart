@@ -1,9 +1,11 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/app_toast.dart';
+import '../../../../core/widgets/project_image_placeholder.dart';
 import '../../../favorites/presentation/providers/favorites_provider.dart';
 import '../../../projects/domain/models/project.dart';
 import '../../../chat/presentation/professional_chat_args.dart';
@@ -71,7 +73,7 @@ class ProjectDetailsScreen extends ConsumerWidget {
             onPressed: () => Navigator.pop(context),
           ),
           Text(
-            'Project Details',
+            'project_details_screen.title'.tr(),
             style: GoogleFonts.outfit(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -93,11 +95,11 @@ class ProjectDetailsScreen extends ConsumerWidget {
                     if (!context.mounted) return;
                     final err = notifier.consumeError();
                     if (err != null) {
-                      AppToast.error('Could not update favorites. Try again.');
+                      AppToast.error('project_details_screen.favorites_error'.tr());
                     } else {
                       AppToast.info(nowFav
-                          ? 'Added to favorites'
-                          : 'Removed from favorites');
+                          ? 'project_details_screen.added_favorites'.tr()
+                          : 'project_details_screen.removed_favorites'.tr());
                     }
                   },
             child: Container(
@@ -130,17 +132,16 @@ class ProjectDetailsScreen extends ConsumerWidget {
   Widget _buildProjectImage() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
-      child: Image.network(
-        project.imageUrl ?? '',
-        height: 250,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => Container(
-          height: 250,
-          color: Colors.grey[200],
-          child: const Icon(LucideIcons.image, color: Colors.black12, size: 50),
-        ),
-      ),
+      child: ProjectImagePlaceholder.hasDisplayableUrl(project.imageUrl)
+          ? Image.network(
+              project.imageUrl!,
+              height: 250,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) =>
+                  const ProjectImagePlaceholder(height: 250),
+            )
+          : const ProjectImagePlaceholder(height: 250),
     );
   }
 
@@ -208,7 +209,7 @@ class ProjectDetailsScreen extends ConsumerWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
               ),
               child: Text(
-                'Messages',
+                'common.messages'.tr(),
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -230,7 +231,7 @@ class ProjectDetailsScreen extends ConsumerWidget {
                 elevation: 0,
               ),
               child: Text(
-                'Accept',
+                'common.accept'.tr(),
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -246,7 +247,7 @@ class ProjectDetailsScreen extends ConsumerWidget {
   void _openClientChat(BuildContext context) {
     final uid = project.clientUserId?.trim();
     if (uid == null || uid.isEmpty) {
-      AppToast.info('Client information is not available for this project yet.');
+      AppToast.info('project_details_screen.no_client_info'.tr());
       return;
     }
     Navigator.push<void>(

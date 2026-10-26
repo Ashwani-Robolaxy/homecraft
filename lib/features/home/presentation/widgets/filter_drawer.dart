@@ -14,9 +14,8 @@ class FilterDrawer extends ConsumerStatefulWidget {
 }
 
 class _FilterDrawerState extends ConsumerState<FilterDrawer> {
-  double _distance = 4.0;
+  double _distance = 500.0;
   final List<bool> _availability = [false, false, false];
-  int _selectedRating = -1;
 
   @override
   void initState() {
@@ -26,12 +25,6 @@ class _FilterDrawerState extends ConsumerState<FilterDrawer> {
     _availability[0] = filters.availability.contains('today');
     _availability[1] = filters.availability.contains('this_week') || filters.availability.contains('within_week');
     _availability[2] = filters.availability.contains('this_month') || filters.availability.contains('next_week');
-    _selectedRating = switch (filters.minRating) {
-      3 => 0,
-      4 => 1,
-      5 => 2,
-      _ => -1,
-    };
   }
 
   @override
@@ -71,7 +64,7 @@ class _FilterDrawerState extends ConsumerState<FilterDrawer> {
               const SizedBox(height: 10),
               SliderTheme(
                 data: SliderTheme.of(context).copyWith(activeTrackColor: AppColors.primaryRed, inactiveTrackColor: const Color(0xFFF0E6E6), thumbColor: AppColors.primaryRed, trackHeight: 6),
-                child: Slider(value: _distance, min: 0, max: 20, onChanged: (val) => setState(() => _distance = val)),
+                child: Slider(value: _distance, min: 0, max: 500, onChanged: (val) => setState(() => _distance = val)),
               ),
               Center(
                 child: Column(
@@ -113,21 +106,7 @@ class _FilterDrawerState extends ConsumerState<FilterDrawer> {
               ),
               const SizedBox(height: 30),
 
-              // Top Rated
-              Text(
-                tr('filter.top_rated'),
-                style: const TextStyle(fontFamily: 'Outfit', fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 15),
-              Container(
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFF0E6E6)),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Column(children: [_buildRatingOption(0, 3), _buildRatingOption(1, 4), _buildRatingOption(2, 5)]),
-              ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
 
               // Action Buttons
               SizedBox(
@@ -144,19 +123,12 @@ class _FilterDrawerState extends ConsumerState<FilterDrawer> {
                       if (_availability[1]) 'this_week',
                       if (_availability[2]) 'this_month',
                     };
-                    final minRating = switch (_selectedRating) {
-                      0 => 3,
-                      1 => 4,
-                      2 => 5,
-                      _ => null,
-                    };
                     final current = ref.read(professionalSearchFiltersProvider);
                     ref.read(professionalSearchFiltersProvider.notifier).set(
                           current.copyWith(
                             maxDistanceKm: _distance,
                             availability: availability,
-                            minRating: minRating,
-                            clearMinRating: minRating == null,
+                            clearMinRating: true,
                           ),
                         );
                     ref.invalidate(recommendedProfessionalsProvider);
@@ -179,9 +151,10 @@ class _FilterDrawerState extends ConsumerState<FilterDrawer> {
                   ),
                   onPressed: () {
                     Navigator.pop(context);
-                    // If we are already on map, just close. If not, go to map.
-                    if (GoRouterState.of(context).uri.toString() != '/map') {
-                      context.push('/map');
+                    if (!GoRouterState.of(context).uri.toString().contains('/professional-results')) {
+                      context.push('/professional-results', extra: {'initialTab': 1});
+                    } else {
+                      context.pushReplacement('/professional-results', extra: {'initialTab': 1});
                     }
                   },
                   child: Text(
@@ -217,19 +190,4 @@ class _FilterDrawerState extends ConsumerState<FilterDrawer> {
     );
   }
 
-  Widget _buildRatingOption(int index, int stars) {
-    return InkWell(
-      onTap: () => setState(() => _selectedRating = index),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: [
-            Icon(_selectedRating == index ? LucideIcons.circleDot : LucideIcons.circle, color: _selectedRating == index ? AppColors.primaryRed : const Color(0xFFBDBDBD)),
-            const SizedBox(width: 12),
-            Row(children: List.generate(stars, (i) => const Icon(LucideIcons.star, color: AppColors.primaryRed, size: 20))),
-          ],
-        ),
-      ),
-    );
-  }
 }

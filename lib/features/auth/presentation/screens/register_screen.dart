@@ -1,7 +1,9 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
@@ -22,13 +24,19 @@ class RegisterScreen extends ConsumerStatefulWidget {
 }
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+  // Web OAuth client ID from Firebase config; used as ID token audience for backend validation.
+  static const String _googleServerClientId =
+      '30170613785-tget5is0cteckkacqmf7ofm0nbvj32b6.apps.googleusercontent.com';
+
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _confirmEmailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _termsAccepted = false;
   bool _isLoading = false;
+  bool _googleInitialized = false;
 
   UserRole get _role {
     final role = GoRouterState.of(context).uri.queryParameters['role'];
@@ -39,6 +47,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _confirmEmailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -68,10 +77,166 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
     await ref.read(authStateNotifierProvider).refresh();
     if (!mounted) return;
-    if (result.user!.isProvider) {
-      context.go('/professional-setup');
-    } else {
-      context.go('/home');
+    final isProvider = result.user!.isProvider;
+    await _showSuccessSheet(isProvider);
+  }
+
+  Future<void> _showSuccessSheet(bool isProvider) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      isDismissible: false,
+      enableDrag: false,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(28, 36, 28, 40),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 180,
+              child: Center(
+                child: Image.asset(
+                  AppAssets.registerSuccess,
+                  height: 180,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'auth.register.success_title'.tr(),
+              style: TextStyle(
+                fontFamily: 'Playfair Display',
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'auth.register.success_body'.tr(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Outfit',
+                fontSize: 15,
+                color: Colors.black54,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 28),
+            GestureDetector(
+              onTap: () {
+                Navigator.of(ctx).pop();
+                if (isProvider) {
+                  ref.read(providerTabIndexProvider.notifier).setIndex(0);
+                  context.go('/provider-home');
+                } else {
+                  context.go('/home');
+                }
+              },
+              child: Container(
+                width: double.infinity,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF900000), Color(0xFF4A0000)],
+                  ),
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  'auth.register.success_continue'.tr(),
+                  style: TextStyle(
+                    fontFamily: 'Outfit',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _googleErrorMessage(Object error) {
+    if (error is GoogleSignInException) {
+      final d = error.description?.trim();
+      return d == null || d.isEmpty
+          ? 'Google sign-in failed (${error.code.name}).'
+          : 'Google sign-in failed: $d';
+    }
+    if (error is FirebaseAuthException) {
+      final msg = error.message?.trim();
+      return msg == null || msg.isEmpty
+          ? 'Firebase auth failed (${error.code}).'
+          : msg;
+    }
+    if (error is UnsupportedError) {
+      return 'Google sign-in is not supported on this device/build.';
+    }
+    return 'Google sign-in failed. Please try again.';
+  }
+
+  Future<void> _signInWithGoogle() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      if (!_googleInitialized) {
+        await GoogleSignIn.instance.initialize(
+          serverClientId: _googleServerClientId,
+        );
+        _googleInitialized = true;
+      }
+      final account = await GoogleSignIn.instance.authenticate();
+      final googleAuth = account.authentication;
+      final idToken = googleAuth.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        AppToast.error('Google sign-in failed: missing idToken.');
+        return;
+      }
+      final credential = GoogleAuthProvider.credential(
+        idToken: idToken,
+      );
+      await FirebaseAuth.instance.signInWithCredential(credential);
+      final repo = ref.read(authRepositoryProvider);
+      final result = await repo.socialLogin(
+        provider: 'google',
+        idToken: idToken,
+        role: _role,
+      );
+      if (!mounted) return;
+      if (result.errorMessage != null) {
+        AppToast.error(result.errorMessage!);
+        return;
+      }
+      await ref.read(authStateNotifierProvider).refresh();
+      if (!mounted) return;
+      final user = result.user!;
+      context.go(user.isProvider ? '/provider-home' : '/home');
+    } catch (e, st) {
+      debugPrint('[Auth][Google][Register] $e\n$st');
+      if (!mounted) return;
+      AppToast.error(_googleErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -86,15 +251,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 30.0, bottom: 20.0),
               child: Image.asset(
-                AppAssets.logoHorizontalRed,
-                height: 45,
-                errorBuilder: (context, error, stackTrace) => Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('H/', style: TextStyle(fontFamily: 'Playfair Display', fontSize: 32, color: AppColors.primaryRed)),
-                    Text('omeCraft', style: TextStyle(fontFamily: 'Playfair Display', fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.primaryRed.withValues(alpha: 0.9))),
-                  ],
-                ),
+                AppAssets.logoRed,
+                height: 82,
+                fit: BoxFit.contain,
               ),
             ),
             Expanded(
@@ -109,6 +268,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 child: SingleChildScrollView(
                   child: Form(
                     key: _formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     child: Column(
                       children: [
                         Text(tr('auth.register.title'), style: const TextStyle(fontFamily: 'Playfair Display', fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF7A0000))),
@@ -132,6 +292,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           validator: AuthValidators.email,
+                        ),
+                        const SizedBox(height: 12),
+                        CustomTextField(
+                          hintText: tr('auth.register.confirm_email'),
+                          prefixIcon: LucideIcons.mail,
+                          controller: _confirmEmailController,
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (v) => AuthValidators.confirmEmail(v, _emailController.text),
                         ),
                         const SizedBox(height: 12),
                         CustomTextField(
@@ -204,8 +372,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        SocialButton(text: tr('auth.register.google_sign_in'), iconPath: 'google', onTap: () {}),
-                        SocialButton(text: tr('auth.register.apple_sign_in'), iconPath: 'apple', onTap: () {}),
+                        SocialButton(
+                          text: tr('auth.register.google_sign_in'),
+                          iconPath: 'google',
+                          onTap: _signInWithGoogle,
+                        ),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [

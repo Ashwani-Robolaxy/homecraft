@@ -4,11 +4,52 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/logout_confirm_dialog.dart';
+import '../../../auth/domain/models/app_user.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../subscription/data/subscription_remote_datasource.dart';
 import '../../../subscription/domain/subscription_data.dart';
 import '../widgets/profile_hero_header.dart';
+
+String _normalizeApiVerificationStatus(String raw) => raw.trim().toLowerCase();
+
+/// True when the saved provider profile matches what we require before treating
+/// verification as submitted (subscription API may still say profile_incomplete briefly).
+bool _providerLooksSubmittedForVerification(AppUser? user) {
+  if (user == null || !user.isProvider) return false;
+  final p = user.providerProfile;
+  if (p == null) return false;
+  final hasSpecialty = (p.specialty?.trim().isNotEmpty == true) ||
+      (p.categoryId != null && p.categoryId! > 0);
+  final siret = (p.siret ?? '').trim();
+  final hasSiret = siret.isNotEmpty && siret != '-';
+  final hasCompany = (p.companyName ?? '').trim().isNotEmpty;
+  final hasServiceAreas = p.serviceAreas.any((e) => e.isValidForApi);
+  return hasSpecialty && hasSiret && hasCompany && hasServiceAreas;
+}
+
+String _effectiveVerificationStatus(String apiRaw, AppUser? user) {
+  final api = _normalizeApiVerificationStatus(apiRaw);
+  switch (api) {
+    case 'verified':
+    case 'rejected':
+    case 'blocked':
+      return api;
+    case 'pending':
+    case 'pending_verification':
+      return 'pending_verification';
+    case 'profile_incomplete':
+    case '':
+      if (_providerLooksSubmittedForVerification(user)) {
+        return 'pending_verification';
+      }
+      return api.isEmpty ? 'profile_incomplete' : api;
+    default:
+      return api.isEmpty ? 'profile_incomplete' : api;
+  }
+}
 
 class ProviderProfileScreen extends ConsumerStatefulWidget {
   const ProviderProfileScreen({super.key});
@@ -58,12 +99,17 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(profileRefreshTriggerProvider, (_, __) {
+      _loadSubscription();
+    });
     final user = ref.watch(authStateNotifierProvider).currentUser;
     final displayName = user?.displayName ?? '';
     final top = MediaQuery.paddingOf(context).top;
     final expandedHeight = _expandedBody + top;
-    final verificationStatus =
+    final apiVerificationStatus =
         _subCtx?.subscriptionState.verificationStatus ?? '';
+    final verificationStatus =
+        _effectiveVerificationStatus(apiVerificationStatus, user);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -89,11 +135,7 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
                     opacity: show,
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Colors.grey[300],
-                          backgroundImage: const AssetImage('assets/images/cleaner_profile_1.png'),
-                        ),
+                        _toolbarAvatar(user?.profilePhotoUrl),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -122,6 +164,7 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
                 _deferHeaderExpandT(t);
                 return ProfileHeroHeader(
                   displayName: displayName,
+                  profilePhotoUrl: user?.profilePhotoUrl,
                   expandT: t,
                   emptyNameFallback: 'Provider',
                   verificationStatus: verificationStatus,
@@ -141,7 +184,7 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
               ),
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          const SliverToBoxAdapter(child: SizedBox(height: 150)),
         ],
       ),
     );
@@ -159,7 +202,9 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
         _buildMenuCard([
           _buildMenuItem(context, icon: LucideIcons.layers, title: 'provider.profile.accepted_projects'.tr(), onTap: () => context.push('/accepted-projects')),
           const Divider(height: 1),
-          _buildMenuItem(context, icon: LucideIcons.briefcase, title: 'Portfolio', onTap: () => context.push('/professional-portfolio')),
+          _buildMenuItem(context, icon: LucideIcons.star, title: 'provider.profile.my_reviews'.tr(), onTap: () => context.push('/professional-reviews')),
+          const Divider(height: 1),
+          _buildMenuItem(context, icon: LucideIcons.briefcase, title: 'portfolio_mgmt.title'.tr(), onTap: () => context.push('/professional-portfolio')),
           const Divider(height: 1),
           _buildMenuItem(context, icon: LucideIcons.heart, title: 'provider.profile.favorites'.tr(), onTap: () => context.push('/provider-favorites')),
           const Divider(height: 1),
@@ -184,6 +229,8 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
             icon: LucideIcons.logOut,
             title: 'provider.profile.log_out'.tr(),
             onTap: () async {
+              final ok = await showLogoutConfirmDialog(context);
+              if (!ok || !context.mounted) return;
               await ref.read(authRepositoryProvider).signOut();
               if (context.mounted) context.go('/splash');
             },
@@ -214,6 +261,30 @@ class _ProviderProfileScreenState extends ConsumerState<ProviderProfileScreen> {
       ),
       trailing: const Icon(LucideIcons.chevronRight, size: 20, color: Colors.grey),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    );
+  }
+
+  Widget _toolbarAvatar(String? url) {
+    final imageUrl = url?.trim();
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return CircleAvatar(
+        radius: 18,
+        backgroundColor: Colors.grey[300],
+        backgroundImage: const AssetImage(AppAssets.profilePlaceholder),
+      );
+    }
+    return ClipOval(
+      child: Image.network(
+        imageUrl,
+        width: 36,
+        height: 36,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => CircleAvatar(
+          radius: 18,
+          backgroundColor: Colors.grey[300],
+          backgroundImage: const AssetImage(AppAssets.profilePlaceholder),
+        ),
+      ),
     );
   }
 }
@@ -268,22 +339,36 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const SizedBox.shrink();
     final ctx = _ctx;
-    if (ctx == null) return const SizedBox.shrink();
+    final sub = ctx?.subscriptionState;
+    final shouldShowCard =
+        !_loading &&
+        ctx != null &&
+        sub != null &&
+        !(sub.status == 'none' &&
+            !sub.promoEligible &&
+            !sub.trialStartsAfterVerification);
 
-    final sub = ctx.subscriptionState;
-    final pricing = ctx.pricing;
-    final endsAt = ctx.subscriptionEndsAt;
-
-    // Don't show card if no subscription info available
-    if (sub.status == 'none' && !sub.promoEligible && !sub.trialStartsAfterVerification) {
-      return const SizedBox.shrink();
-    }
-
-    return GestureDetector(
-      onTap: () => context.push('/subscription-plans'),
-      child: Container(
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 350),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: animation,
+            axisAlignment: -1,
+            child: child,
+          ),
+        );
+      },
+      child: !shouldShowCard
+          ? const SizedBox.shrink(key: ValueKey('sub-empty'))
+          : GestureDetector(
+              key: const ValueKey('sub-card'),
+              onTap: () => context.push('/subscription-plans'),
+              child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -331,7 +416,7 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    _statusSubtitle(sub, pricing, endsAt),
+                    _statusSubtitle(sub, ctx.pricing, ctx.subscriptionEndsAt),
                     style: GoogleFonts.outfit(
                       fontSize: 12,
                       color: Colors.white.withOpacity(0.85),
@@ -339,7 +424,7 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
                     ),
                   ),
                   // ── End-date chip ────────────────────────────────────
-                  if (_endDateLine(sub, endsAt) != null) ...[
+                  if (_endDateLine(sub, ctx.subscriptionEndsAt, cancelAtPeriodEnd: ctx.cancelAtPeriodEnd) != null) ...[
                     const SizedBox(height: 7),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -353,12 +438,19 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
                           Icon(LucideIcons.calendarClock,
                               color: Colors.white.withOpacity(0.9), size: 12),
                           const SizedBox(width: 5),
-                          Text(
-                            _endDateLine(sub, endsAt)!,
-                            style: GoogleFonts.outfit(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                _endDateLine(sub, ctx.subscriptionEndsAt, cancelAtPeriodEnd: ctx.cancelAtPeriodEnd)!,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                                maxLines: 1,
+                              ),
                             ),
                           ),
                         ],
@@ -401,6 +493,7 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
           ],
         ),
       ),
+            ),
     );
   }
 
@@ -410,12 +503,15 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   /// Returns the text for the end-date chip, or null if not applicable.
-  String? _endDateLine(SubscriptionState sub, DateTime? stripeEnd) {
+  String? _endDateLine(SubscriptionState sub, DateTime? stripeEnd, {bool cancelAtPeriodEnd = false}) {
     if (sub.status == 'active' && stripeEnd != null) {
-      return 'Renews ${_fmt(stripeEnd)}';
+      if (cancelAtPeriodEnd) {
+        return 'provider.subscription_card.expires'.tr(namedArgs: {'date': _fmt(stripeEnd)});
+      }
+      return 'provider.subscription_card.renews'.tr(namedArgs: {'date': _fmt(stripeEnd)});
     }
     if (sub.status == 'trial' && sub.trialEndsAt != null) {
-      return 'Trial ends ${_fmt(sub.trialEndsAt!)}';
+      return 'provider.subscription_card.trial_ends'.tr(namedArgs: {'date': _fmt(sub.trialEndsAt!)});
     }
     return null;
   }
@@ -444,44 +540,52 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
 
   String _statusTitle(SubscriptionState sub) {
     switch (sub.status) {
-      case 'active': return 'Premium Active';
+      case 'active':
+        return 'provider.subscription_card.premium_active'.tr();
       case 'trial':
-        return sub.trialActive
-            ? 'Free Trial — ${sub.trialDaysRemaining} day${sub.trialDaysRemaining == 1 ? '' : 's'} left'
-            : 'Trial Period';
-      case 'lapsed': return 'Subscription Lapsed';
+        if (!sub.trialActive) return 'provider.subscription_card.trial_period'.tr();
+        final d = sub.trialDaysRemaining;
+        return d == 1
+            ? 'provider.subscription_card.free_trial_one'.tr()
+            : 'provider.subscription_card.free_trial_many'.tr(namedArgs: {'days': '$d'});
+      case 'lapsed':
+        return 'provider.subscription_card.subscription_lapsed'.tr();
       default:
         return sub.trialStartsAfterVerification
-            ? 'Trial Starts After Verification'
-            : 'No Active Subscription';
+            ? 'provider.subscription_card.trial_after_verify'.tr()
+            : 'provider.subscription_card.no_subscription'.tr();
     }
   }
 
   String _statusSubtitle(SubscriptionState sub, SubscriptionPricing pricing, DateTime? stripeEnd) {
     switch (sub.status) {
       case 'active':
-        return 'All features unlocked.';
+        return 'provider.subscription_card.subtitle_active'.tr();
       case 'trial':
-        return '${pricing.trialDays}-day free trial · Tap to subscribe';
+        return 'provider.subscription_card.subtitle_trial'.tr(namedArgs: {'days': '${pricing.trialDays}'});
       case 'lapsed':
-        return 'Renew to restore full access.';
+        return 'provider.subscription_card.subtitle_lapsed'.tr();
       default:
         if (sub.trialStartsAfterVerification) {
-          return 'Complete verification to start your ${pricing.trialDays}-day free trial.';
+          return 'provider.subscription_card.subtitle_verify'.tr(namedArgs: {'days': '${pricing.trialDays}'});
         }
         if (sub.promoEligible) {
-          return 'Start your ${pricing.trialDays}-day free trial.';
+          return 'provider.subscription_card.subtitle_promo'.tr(namedArgs: {'days': '${pricing.trialDays}'});
         }
-        return 'Tap to view available plans.';
+        return 'provider.subscription_card.subtitle_default'.tr();
     }
   }
 
   String _badgeLabel(SubscriptionState sub) {
     switch (sub.status) {
-      case 'active': return 'ACTIVE';
-      case 'trial':  return 'TRIAL';
-      case 'lapsed': return 'LAPSED';
-      default:       return 'FREE';
+      case 'active':
+        return 'provider.subscription_card.badge_active'.tr();
+      case 'trial':
+        return 'provider.subscription_card.badge_trial'.tr();
+      case 'lapsed':
+        return 'provider.subscription_card.badge_lapsed'.tr();
+      default:
+        return 'provider.subscription_card.badge_free'.tr();
     }
   }
 }

@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/app_toast.dart';
 import '../../../../core/widgets/primary_gradient_button.dart';
 import '../providers/project_provider.dart';
 import '../widgets/project_card.dart';
@@ -36,32 +37,60 @@ class ProjectListScreen extends ConsumerWidget {
             ),
           ),
           Expanded(
-            child: projectsAsync.when(
-              loading: _buildLoadingShimmer,
-              error: (_, __) => _buildErrorState(ref),
-              data: (result) {
-                final projects = result.projects;
-                if (projects.isEmpty) return _buildEmptyState();
-                final remaining = result.remainingDisplay;
-                return ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
-                    if (remaining != null) ...[
+            child: RefreshIndicator(
+              color: AppColors.primaryRed,
+              onRefresh: () async => ref.refresh(myProjectsProvider.future),
+              child: projectsAsync.when(
+                loading: _buildLoadingShimmer,
+                error: (_, __) => _buildErrorState(ref),
+                data: (result) {
+                  final projects = result.projects;
+                  if (projects.isEmpty) return _buildEmptyState();
+                  final remaining = result.remainingDisplay;
+                  return ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    children: [
+                      if (remaining != null) ...[
+                        Text(
+                          tr('projects.remaining_count', namedArgs: {'count': remaining}),
+                          style: const TextStyle(fontFamily: 'Outfit', fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primaryRed),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       Text(
-                        tr('projects.remaining_count', namedArgs: {'count': remaining}),
-                        style: const TextStyle(fontFamily: 'Outfit', fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primaryRed),
+                        tr('projects.my_projects'),
+                        style: const TextStyle(fontFamily: 'Outfit', fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textMain),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
+                      ...projects.map(
+                        (p) => ProjectCard(
+                          project: p,
+                          isClientOwnProject: true,
+                          onEdit: () async {
+                            final updated = await context.push('/create-project', extra: p);
+                            if (updated == true) {
+                              ref.invalidate(myProjectsProvider);
+                            }
+                          },
+                          onDelete: () async {
+                            final shouldDelete = await _showDeleteProjectConfirmDialog(context);
+                            if (!shouldDelete) return;
+                            final result = await ref.read(projectRepositoryProvider).deleteProject(p.id);
+                            if (result.errorMessage != null) {
+                              AppToast.error(result.errorMessage!);
+                              return;
+                            }
+                            if (!context.mounted) return;
+                            AppToast.success('Project deleted successfully');
+                            ref.invalidate(myProjectsProvider);
+                          },
+                        ),
+                      ),
                     ],
-                    Text(
-                      tr('projects.my_projects'),
-                      style: const TextStyle(fontFamily: 'Outfit', fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textMain),
-                    ),
-                    const SizedBox(height: 16),
-                    ...projects.map((p) => ProjectCard(project: p)),
-                  ],
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -85,40 +114,99 @@ class ProjectListScreen extends ConsumerWidget {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            tr('projects.no_projects_remaining'),
-            style: const TextStyle(fontFamily: 'Outfit', fontSize: 16, color: AppColors.textSecondary),
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: 360,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    tr('projects.no_projects_remaining'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontFamily: 'Outfit', fontSize: 16, color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
+            ),
           ),
-          Text(
-            tr('projects.add_limit_info'),
-            style: const TextStyle(fontFamily: 'Outfit', fontSize: 16, color: AppColors.textSecondary),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildErrorState(WidgetRef ref) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            'Unable to load projects.',
-            style: TextStyle(fontFamily: 'Outfit', fontSize: 16, color: AppColors.textSecondary),
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: 360,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'Unable to load projects.',
+                  style: TextStyle(fontFamily: 'Outfit', fontSize: 16, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => ref.invalidate(myProjectsProvider),
+                  child: Text('common.retry'.tr()),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
+        ),
+      ],
+    );
+  }
+
+  Future<bool> _showDeleteProjectConfirmDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black45,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Delete project?',
+          style: TextStyle(fontFamily: 'Outfit', fontWeight: FontWeight.w600),
+        ),
+        content: const Text(
+          'Are you sure you want to delete this project? This action cannot be undone.',
+          style: TextStyle(fontFamily: 'Outfit', color: Colors.black54, height: 1.4),
+        ),
+        actions: [
           TextButton(
-            onPressed: () => ref.invalidate(myProjectsProvider),
-            child: const Text('Retry'),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              tr('settings.cancel'),
+              style: const TextStyle(fontFamily: 'Outfit', color: Colors.black54),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text(
+              'Delete',
+              style: TextStyle(fontFamily: 'Outfit', fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
     );
+    return result == true;
   }
 }
 

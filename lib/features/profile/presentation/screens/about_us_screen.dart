@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -12,7 +13,7 @@ class AboutUsScreen extends ConsumerWidget {
     final faqs = ref.watch(faqProvider);
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: const CommonAppBar(title: 'FAQ - ABOUT US', showNotification: false),
+      appBar: CommonAppBar(title: 'client_profile.faq_about_us'.tr(), showNotification: false),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         child: Container(
@@ -26,7 +27,7 @@ class AboutUsScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Frequently Asked Questions',
+                'Frequently Asked Questions'.tr(),
                 style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black),
               ),
               const SizedBox(height: 16),
@@ -50,14 +51,14 @@ class AboutUsScreen extends ConsumerWidget {
                           tilePadding: const EdgeInsets.symmetric(horizontal: 4),
                           childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                           title: Text(
-                            f.question,
+                            f.question.tr(),
                             style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
                           ),
                           children: [
                             Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                f.answer,
+                                f.answer.tr(),
                                 style: GoogleFonts.outfit(fontSize: 14, color: Colors.black54, height: 1.5),
                               ),
                             ),

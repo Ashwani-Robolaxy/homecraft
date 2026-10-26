@@ -59,7 +59,7 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
 
   Future<void> _saveAvailability() async {
     if (_selectedDays.isEmpty) {
-      AppToast.info('Please select at least one day.');
+      AppToast.info('provider.calendar.select_at_least_one_day'.tr());
       return;
     }
 
@@ -71,21 +71,21 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
     try {
       final token = await _session.getToken();
       if (token == null || token.isEmpty) {
-        throw Exception('Not authenticated. Please log in again.');
+        throw Exception('provider.calendar.not_authenticated'.tr());
       }
 
       final y = _focusedMonth.year;
       final m = _focusedMonth.month;
 
-      // Build time-slots payload
-      final slots = _timeSlots.map((s) => {'startTime': _toHHmm(s.start), 'endTime': _toHHmm(s.end)}).toList();
+      // Swagger: PUT /professionals/availability/{date} — body uses `shifts` (not `slots`), HH:MM.
+      final shifts = _timeSlots.map((s) => {'startTime': _toHHmm(s.start), 'endTime': _toHHmm(s.end)}).toList();
 
       final List<String> failed = [];
 
       for (final dayNum in _selectedDays.toList()..sort()) {
         final dateStr = '$y-${m.toString().padLeft(2, '0')}-${dayNum.toString().padLeft(2, '0')}';
 
-        final payload = <String, dynamic>{'isAvailable': _statusType != 'unavailable', if (_statusType == 'hourAvailable') 'isPartiallyAvailable': true, if (slots.isNotEmpty) 'slots': slots};
+        final payload = <String, dynamic>{'isAvailable': _statusType != 'unavailable', if (shifts.isNotEmpty) 'shifts': shifts};
 
         try {
           await _api.put('/professionals/availability/$dateStr', body: payload, token: token);
@@ -97,7 +97,7 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
       if (!mounted) return;
 
       if (failed.isEmpty) {
-        AppToast.success('Availability updated for ${_selectedDays.length} day(s).');
+        AppToast.success('provider.calendar.availability_updated'.tr(args: [_selectedDays.length.toString()]));
         // Return true so CalendarManagementScreen can refresh
         Navigator.of(context).pop(true);
       } else {
@@ -171,7 +171,7 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
                   children: [
                     const CircularProgressIndicator(color: AppColors.primaryRed),
                     const SizedBox(height: 16),
-                    Text('Saving availability…', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary)),
+                    Text('provider.profile.saving_availability'.tr(), style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary)),
                   ],
                 ),
               ),
@@ -234,7 +234,15 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+            children: [
+              'provider.calendar.week_mon'.tr(),
+              'provider.calendar.week_tue'.tr(),
+              'provider.calendar.week_wed'.tr(),
+              'provider.calendar.week_thu'.tr(),
+              'provider.calendar.week_fri'.tr(),
+              'provider.calendar.week_sat'.tr(),
+              'provider.calendar.week_sun'.tr(),
+            ]
                 .map(
                   (d) => SizedBox(
                     width: 36,
@@ -312,7 +320,7 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 10, bottom: 4),
             child: Text(
-              _selectedDays.isEmpty ? 'Tap days to select them for editing.' : '${_selectedDays.length} day(s) selected  •  tap to deselect',
+              _selectedDays.isEmpty ? 'provider.profile.tap_days_edit_hint'.tr() : 'provider.profile.days_selected_hint'.tr(args: [_selectedDays.length.toString()]),
               style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
@@ -337,7 +345,7 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Set status for selected days',
+            'provider.profile.set_status_title'.tr(),
             style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textMain),
           ),
           const SizedBox(height: 10),
@@ -418,11 +426,11 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
                   onTap: () => setState(() => _timeSlots.add((start: _startTime, end: _endTime))),
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(LucideIcons.plus, color: Colors.white, size: 20),
+                        const Icon(LucideIcons.plus, color: Colors.white, size: 18),
                         const SizedBox(width: 4),
                         Text(
                           'provider.profile.add'.tr(),
@@ -614,15 +622,15 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
 
   void _confirmAndSave() {
     if (_selectedDays.isEmpty) {
-      AppToast.info('Please select at least one day.');
+      AppToast.info('provider.calendar.select_at_least_one_day'.tr());
       return;
     }
 
     final statusLabel = _statusType == 'available'
-        ? 'Available'
+        ? 'provider.profile.available'.tr()
         : _statusType == 'hourAvailable'
-        ? 'Hour Available'
-        : 'Unavailable';
+        ? 'provider.profile.hour_available'.tr()
+        : 'provider.profile.unavailable'.tr();
 
     showDialog(
       context: context,
@@ -639,14 +647,19 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Confirm Update',
+                'provider.profile.confirm_update'.tr(),
                 style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textMain),
               ),
               const SizedBox(height: 10),
               Text(
-                'Mark ${_selectedDays.length} day(s) in '
-                '${_monthName(_focusedMonth.month)} as "$statusLabel"'
-                '${_timeSlots.isNotEmpty ? ' with ${_timeSlots.length} time slot(s)' : ''}.',
+                'provider.profile.confirm_update_desc'.tr(
+                  args: [
+                    _selectedDays.length.toString(),
+                    _monthName(_focusedMonth.month),
+                    statusLabel,
+                    _timeSlots.isNotEmpty ? 'provider.profile.with_slots'.tr(args: [_timeSlots.length.toString()]) : '',
+                  ],
+                ),
                 style: GoogleFonts.outfit(fontSize: 16, height: 1.4, color: Colors.black54),
               ),
               const SizedBox(height: 28),
@@ -691,8 +704,10 @@ class _EditCalendarScreenState extends State<EditCalendarScreen> {
   }
 
   String _monthName(int m) {
-    const n = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    return n[m - 1];
+    final localeTag = context.locale.languageCode;
+    final name = DateFormat.MMMM(localeTag).format(DateTime(_focusedMonth.year, m));
+    if (name.isEmpty) return name;
+    return name[0].toUpperCase() + name.substring(1);
   }
 }
 
@@ -767,25 +782,31 @@ class _TimeField extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
           border: Border.all(color: AppColors.borderLight),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            const Icon(LucideIcons.clock, size: 18, color: AppColors.textSecondary),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label, style: GoogleFonts.outfit(fontSize: 11, color: AppColors.textSecondary)),
-                Text(
-                  _format(value),
-                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textMain),
-                ),
-              ],
+            const Icon(LucideIcons.clock, size: 16, color: AppColors.textSecondary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(label, style: GoogleFonts.outfit(fontSize: 11, color: AppColors.textSecondary)),
+                  ),
+                  Text(
+                    _format(value),
+                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textMain),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

@@ -1,26 +1,26 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/common_app_bar.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import 'message_screen.dart';
 import 'provider_home_screen.dart';
 import 'calendar_management_screen.dart';
 import '../../../profile/presentation/screens/provider_profile_screen.dart';
 
-class ProviderMainScreen extends StatefulWidget {
+class ProviderMainScreen extends ConsumerStatefulWidget {
   const ProviderMainScreen({super.key});
 
   @override
-  State<ProviderMainScreen> createState() => _ProviderMainScreenState();
+  ConsumerState<ProviderMainScreen> createState() => _ProviderMainScreenState();
 }
 
-class _ProviderMainScreenState extends State<ProviderMainScreen> {
-  int _selectedIndex = 0;
-
+class _ProviderMainScreenState extends ConsumerState<ProviderMainScreen> {
   /// Build current tab screen without const so it rebuilds when locale changes.
-  Widget _buildCurrentScreen() {
-    switch (_selectedIndex) {
+  Widget _buildCurrentScreen(int selectedIndex) {
+    switch (selectedIndex) {
       case 0:
         return ProviderHomeScreen();
       case 1:
@@ -34,11 +34,19 @@ class _ProviderMainScreenState extends State<ProviderMainScreen> {
     }
   }
 
+  void _onTabTap(int index) {
+    ref.read(providerTabIndexProvider.notifier).setIndex(index);
+    if (index == 3) {
+      ref.read(authStateNotifierProvider).refresh();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final selectedIndex = ref.watch(providerTabIndexProvider);
     return Scaffold(
       extendBody: true,
-      body: _buildCurrentScreen(),
+      body: _buildCurrentScreen(selectedIndex),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -55,8 +63,8 @@ class _ProviderMainScreenState extends State<ProviderMainScreen> {
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, -2))],
             ),
             child: BottomNavigationBar(
-              currentIndex: _selectedIndex,
-              onTap: (index) => setState(() => _selectedIndex = index),
+              currentIndex: selectedIndex,
+              onTap: _onTabTap,
               type: BottomNavigationBarType.fixed,
               backgroundColor: Colors.white,
               elevation: 0,

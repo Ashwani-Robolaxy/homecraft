@@ -49,7 +49,8 @@ class FavoritesState {
 // ── Notifier ──────────────────────────────────────────────────────────────────
 
 class FavoritesNotifier extends Notifier<FavoritesState> {
-  final _ds = FavoritesRemoteDatasource();
+  final _defaultDs = FavoritesRemoteDatasource();
+  FavoritesRemoteDatasource get ds => _defaultDs;
   String? _lastError;
 
   String? consumeError() {
@@ -70,8 +71,8 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
     state = state.copyWith(loading: true, collectionsLoading: true, error: null);
     try {
       final results = await Future.wait([
-        _ds.listFavorites(),
-        _ds.listCollections(),
+        ds.listFavorites(),
+        ds.listCollections(),
       ]);
       state = state.copyWith(
         items: results[0] as List<FavoriteItem>,
@@ -93,12 +94,16 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
   Future<void> loadCollections() async {
     state = state.copyWith(collectionsLoading: true);
     try {
-      final cols = await _ds.listCollections();
+      final cols = await ds.listCollections();
       state = state.copyWith(collections: cols, collectionsLoading: false);
     } catch (_) {
       state = state.copyWith(collectionsLoading: false);
     }
   }
+
+  /// Favorites assigned to a specific list/collection (GET …/favorites/items?listId=).
+  Future<List<FavoriteItem>> fetchItemsForList(int listId) =>
+      ds.listFavorites(listId: listId);
 
   // ── Toggle favorite ───────────────────────────────────────────────────────
 
@@ -111,7 +116,7 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
     return _toggle(
       itemId: professionalId,
       type: FavoriteType.professional,
-      addFn: () => _ds.addProfessional(professionalId),
+      addFn: () => ds.addProfessional(professionalId),
       displayName: displayName,
       subtitle: subtitle,
       imageUrl: imageUrl,
@@ -127,7 +132,7 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
     return _toggle(
       itemId: projectId,
       type: FavoriteType.project,
-      addFn: () => _ds.addProject(projectId),
+      addFn: () => ds.addProject(projectId),
       displayName: displayName,
       subtitle: subtitle,
       imageUrl: imageUrl,
@@ -149,7 +154,7 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
       if (wasFavorited) {
         final updated = state.items.where((f) => f.itemId != itemId).toList();
         state = state.copyWith(items: updated);
-        await _ds.removeFavoriteByItemId(itemId, type: type);
+        await ds.removeFavoriteByItemId(itemId, type: type);
       } else {
         final placeholder = FavoriteItem(
           favoriteId: 0,
@@ -197,7 +202,7 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
   /// Create a new collection. Returns the created collection.
   Future<FavoriteCollection?> createCollection(String name) async {
     try {
-      final col = await _ds.createCollection(name);
+      final col = await ds.createCollection(name);
       state = state.copyWith(collections: [...state.collections, col]);
       return col;
     } on Exception catch (e) {
@@ -206,11 +211,41 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
     }
   }
 
+  Future<bool> renameCollection(int listId, String name) async {
+    try {
+      final updated = await ds.renameCollection(listId, name);
+      state = state.copyWith(
+        collections: state.collections
+            .map((c) => c.id == listId ? c.copyWith(name: updated.name) : c)
+            .toList(),
+      );
+      return true;
+    } on Exception catch (e) {
+      _lastError = e.toString().replaceFirst('Exception: ', '');
+      return false;
+    }
+  }
+
+  Future<bool> deleteCollection(int listId) async {
+    final prev = state.collections;
+    state = state.copyWith(
+      collections: state.collections.where((c) => c.id != listId).toList(),
+    );
+    try {
+      await ds.deleteCollection(listId);
+      return true;
+    } on Exception catch (e) {
+      _lastError = e.toString().replaceFirst('Exception: ', '');
+      state = state.copyWith(collections: prev);
+      return false;
+    }
+  }
+
   /// Move a favorited item into a collection.
   Future<bool> moveToCollection(FavoriteItem item, int collectionId) async {
     if (item.favoriteId == 0) return false;
     try {
-      await _ds.moveItemToCollection(item.favoriteId, collectionId);
+      await ds.moveItemToCollection(item.favoriteId, collectionId);
       // Update the collection's item count locally
       final updatedCols = state.collections.map((c) {
         if (c.id == collectionId) {
@@ -234,9 +269,9 @@ class FavoritesNotifier extends Notifier<FavoritesState> {
     state = state.copyWith(items: updated);
     try {
       if (item.favoriteId != 0) {
-        await _ds.removeFavorite(item.favoriteId);
+        await ds.removeFavorite(item.favoriteId);
       } else {
-        await _ds.removeFavoriteByItemId(item.itemId, type: item.type);
+        await ds.removeFavoriteByItemId(item.itemId, type: item.type);
       }
     } catch (_) {
       await load();

@@ -1,10 +1,15 @@
+import 'dart:io';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/storage/session_storage.dart';
+import '../../../../core/widgets/logout_confirm_dialog.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../widgets/profile_hero_header.dart';
 
@@ -17,7 +22,28 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final ValueNotifier<double> _headerExpandT = ValueNotifier(1.0);
+  final _session = SessionStorage();
   static const double _expandedBody = 248;
+  int _avatarNonce = 0;
+  String? _localProfilePhotoPath;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _refreshProfileData();
+    });
+  }
+
+  Future<void> _refreshProfileData() async {
+    final localPath = await _session.getLocalProfilePhotoPath();
+    if (!mounted) return;
+    _localProfilePhotoPath = localPath;
+    await ref.read(authStateNotifierProvider).refresh();
+    if (!mounted) return;
+    setState(() => _avatarNonce++);
+  }
 
   @override
   void dispose() {
@@ -37,8 +63,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // When PersonalInfoScreen signals a save, immediately reload local photo + auth.
+    ref.listen<int>(profileRefreshTriggerProvider, (_, __) {
+      _refreshProfileData();
+    });
+
     final user = ref.watch(authStateNotifierProvider).currentUser;
     final displayName = user?.displayName ?? '';
+    final profilePhotoUrl = user?.profilePhotoUrl;
+    final avatarVersion = user?.updatedAt?.millisecondsSinceEpoch;
     final top = MediaQuery.paddingOf(context).top;
     final expandedHeight = _expandedBody + top;
 
@@ -67,11 +100,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     opacity: show,
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Colors.grey[300],
-                          backgroundImage: const AssetImage('assets/images/cleaner_profile_1.png'),
-                        ),
+                        _toolbarAvatar(profilePhotoUrl, avatarVersion),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -100,8 +129,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 _deferHeaderExpandT(t);
                 return ProfileHeroHeader(
                   displayName: displayName,
+                  profilePhotoUrl: profilePhotoUrl,
+                  localProfilePhotoPath: _localProfilePhotoPath,
+                  avatarVersion: avatarVersion,
+                  avatarNonce: _avatarNonce,
                   expandT: t,
                   emptyNameFallback: tr('home.tabs.profile'),
+                  showVerificationBadge: false,
                 );
               },
             ),
@@ -112,38 +146,102 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: _buildMenuSection(context, ref),
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          const SliverToBoxAdapter(child: SizedBox(height: 150)),
         ],
       ),
     );
+  }
+
+  Widget _toolbarAvatar(String? url, int? avatarVersion) {
+    if (_localProfilePhotoPath != null && _localProfilePhotoPath!.isNotEmpty) {
+      return CircleAvatar(
+        radius: 18,
+        backgroundColor: Colors.grey[300],
+        child: ClipOval(
+          child: Image.file(
+            File(_localProfilePhotoPath!),
+            width: 36,
+            height: 36,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Image.asset(
+              AppAssets.profilePlaceholder,
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+      );
+    }
+    final imageUrl = _avatarUrlWithVersion(url, avatarVersion, _avatarNonce);
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return CircleAvatar(
+        radius: 18,
+        backgroundColor: Colors.grey[300],
+        backgroundImage: const AssetImage(AppAssets.profilePlaceholder),
+      );
+    }
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: Colors.grey[300],
+      child: ClipOval(
+        child: Image.network(
+          imageUrl,
+          width: 36,
+          height: 36,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Image.asset(
+            AppAssets.profilePlaceholder,
+            width: 36,
+            height: 36,
+            fit: BoxFit.cover,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _avatarUrlWithVersion(String? url, int? version, int nonce) {
+    final base = url?.trim();
+    if (base == null || base.isEmpty) return null;
+    final effectiveVersion = version ?? nonce;
+    if (effectiveVersion == 0) return base;
+    final sep = base.contains('?') ? '&' : '?';
+    return '$base${sep}v=$effectiveVersion';
   }
 
   Widget _buildMenuSection(BuildContext context, WidgetRef ref) {
     return Column(
       children: [
         _buildMenuCard([
-          _buildMenuItem(icon: LucideIcons.user, title: 'Personal Info', onTap: () => context.push('/personal-info')),
+          _buildMenuItem(
+            icon: LucideIcons.user,
+            title: 'client_profile.personal_info'.tr(),
+            onTap: () => context.push('/personal-info'),
+          ),
           const Divider(height: 1),
-          _buildMenuItem(icon: LucideIcons.bell, title: 'Notification', onTap: () {}),
+          _buildMenuItem(icon: LucideIcons.bell, title: 'client_profile.notification'.tr(), onTap: () => context.push('/notification-preference')),
         ]),
         const SizedBox(height: 20),
-        _buildMenuCard([_buildMenuItem(icon: LucideIcons.helpCircle, title: 'Contact Support', onTap: () => context.push('/contact-support'))]),
+        _buildMenuCard([_buildMenuItem(icon: LucideIcons.helpCircle, title: 'client_profile.contact_support'.tr(), onTap: () => context.push('/contact-support'))]),
         const SizedBox(height: 20),
         _buildMenuCard([
-          _buildMenuItem(icon: LucideIcons.settings, title: 'Settings', onTap: () => context.push('/settings')),
+          _buildMenuItem(icon: LucideIcons.settings, title: 'client_profile.settings_item'.tr(), onTap: () => context.push('/settings')),
           const Divider(height: 1),
-          _buildMenuItem(icon: LucideIcons.fileText, title: 'Term & Condition', onTap: () => context.push('/terms-of-service')),
+          _buildMenuItem(icon: LucideIcons.fileText, title: 'client_profile.term_condition'.tr(), onTap: () => context.push('/terms-of-service')),
           const Divider(height: 1),
-          _buildMenuItem(icon: LucideIcons.shieldAlert, title: 'Privacy Policy', onTap: () => context.push('/privacy-policy')),
+          _buildMenuItem(icon: LucideIcons.shieldAlert, title: 'client_profile.privacy_policy'.tr(), onTap: () => context.push('/privacy-policy')),
           const Divider(height: 1),
-          _buildMenuItem(icon: LucideIcons.helpCircle, title: 'FAQ - ABOUT US', onTap: () => context.push('/about-us')),
+          _buildMenuItem(icon: LucideIcons.helpCircle, title: 'client_profile.faq_about_us'.tr(), onTap: () => context.push('/about-us')),
         ]),
         const SizedBox(height: 20),
         _buildMenuCard([
           _buildMenuItem(
             icon: LucideIcons.logOut,
-            title: 'Log Out',
+            title: 'client_profile.log_out'.tr(),
             onTap: () async {
+              final ok = await showLogoutConfirmDialog(context);
+              if (!ok || !context.mounted) return;
               await ref.read(authRepositoryProvider).signOut();
               if (context.mounted) context.go('/splash');
             },

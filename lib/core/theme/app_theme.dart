@@ -4,12 +4,22 @@ import '../constants/app_colors.dart';
 
 class AppTheme {
   static ThemeData get lightTheme {
+    const whiteMenu = MenuStyle(
+      backgroundColor: WidgetStatePropertyAll<Color>(Colors.white),
+      surfaceTintColor: WidgetStatePropertyAll<Color>(Colors.transparent),
+    );
     return ThemeData(
       primaryColor: AppColors.primaryRed,
+      // DropdownButton menus use canvasColor when dropdownColor is null.
+      canvasColor: Colors.white,
       scaffoldBackgroundColor: AppColors.backgroundWhite, // For the auth background
       fontFamily: GoogleFonts.outfit().fontFamily,
       textTheme: GoogleFonts.outfitTextTheme().copyWith(
         titleLarge: const TextStyle(fontFamily: 'Playfair Display', fontWeight: FontWeight.bold),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -36,6 +46,17 @@ class AppTheme {
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
       ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+      ),
+      dialogBackgroundColor: Colors.white,
+      popupMenuTheme: const PopupMenuThemeData(
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
+      ),
+      menuTheme: const MenuThemeData(style: whiteMenu),
+      dropdownMenuTheme: const DropdownMenuThemeData(menuStyle: whiteMenu),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,

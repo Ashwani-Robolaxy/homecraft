@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/constants/app_assets.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/app_shimmer.dart';
+import '../../../../core/widgets/project_image_placeholder.dart';
 import '../../domain/models/project.dart';
 
 class ProjectCard extends StatelessWidget {
@@ -12,7 +14,10 @@ class ProjectCard extends StatelessWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onChat;
 
-  const ProjectCard({super.key, required this.project, this.onEdit, this.onDelete, this.onChat});
+  /// **My projects** (client owner): hide comment / interest shortcuts; details open without visitor UI.
+  final bool isClientOwnProject;
+
+  const ProjectCard({super.key, required this.project, this.onEdit, this.onDelete, this.onChat, this.isClientOwnProject = false});
 
   @override
   Widget build(BuildContext context) {
@@ -25,35 +30,32 @@ class ProjectCard extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => context.push('/project-details', extra: project),
+        onTap: () {
+          if (isClientOwnProject) {
+            context.push('/project-details', extra: (project: project, openAsClientOwner: true));
+          } else {
+            context.push('/project-details', extra: project);
+          }
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Image and Action Icons
             Stack(
               children: [
-                Image.network(
-                  project.imageUrl ?? 'https://via.placeholder.com/400x200',
-                  height: 180,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return AppShimmer(
-                      child: ShimmerBox(
-                        width: double.infinity,
+                ProjectImagePlaceholder.hasDisplayableUrl(project.imageUrl)
+                    ? Image.network(
+                        project.imageUrl!,
                         height: 180,
-                        radius: 0,
-                      ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    height: 180,
-                    width: double.infinity,
-                    color: Colors.grey[200],
-                    child: const Center(child: Icon(LucideIcons.image, color: Colors.grey, size: 40)),
-                  ),
-                ),
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return AppShimmer(child: ShimmerBox(width: double.infinity, height: 180, radius: 0));
+                        },
+                        errorBuilder: (context, error, stackTrace) => const ProjectImagePlaceholder(height: 180),
+                      )
+                    : const ProjectImagePlaceholder(height: 180),
                 Positioned(
                   top: 12,
                   right: 12,
@@ -65,17 +67,18 @@ class ProjectCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Positioned(
-                  bottom: 12,
-                  right: 12,
-                  child: Row(
-                    children: [
-                      _CircleActionButton(icon: LucideIcons.messageSquare, color: AppColors.primaryRed, onTap: () => _showCommentsBottomSheet(context)),
-                      const SizedBox(width: 8),
-                      _CircleActionButton(icon: LucideIcons.messageCircle, color: AppColors.primaryRed, onTap: onChat),
-                    ],
+                if (!isClientOwnProject)
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: Row(
+                      children: [
+                        _CircleActionButton(icon: LucideIcons.messageSquare, color: AppColors.primaryRed, onTap: () => _showCommentsBottomSheet(context)),
+                        const SizedBox(width: 8),
+                        _CircleActionButton(icon: LucideIcons.messageCircle, color: AppColors.primaryRed, onTap: onChat),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
             Padding(
@@ -190,7 +193,17 @@ class ProjectCard extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              CircleAvatar(radius: 18, backgroundImage: NetworkImage(comment.userAvatar)),
+                              ClipOval(
+                                child: SizedBox(
+                                  width: 36,
+                                  height: 36,
+                                  child: Image.network(
+                                    comment.userAvatar,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Image.asset(AppAssets.profilePlaceholder, fit: BoxFit.cover),
+                                  ),
+                                ),
+                              ),
                               const SizedBox(width: 12),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,

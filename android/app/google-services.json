@@ -1,26 +1,51 @@
 {
   "project_info": {
-    "project_number": "517194497087",
-    "project_id": "homecraft-robolaxy",
-    "storage_bucket": "homecraft-robolaxy.firebasestorage.app"
+    "project_number": "30170613785",
+    "project_id": "homecraft-762f4",
+    "storage_bucket": "homecraft-762f4.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:517194497087:android:d89560c19a9b8602534c8a",
+        "mobilesdk_app_id": "1:30170613785:android:11f5dc4bd6e3bc6a3d8288",
         "android_client_info": {
-          "package_name": "com.example.homecraft"
+          "package_name": "com.homecraft.service"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "30170613785-vejpjgkoprl98ujuqcech3eph35g08v3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.homecraft.service",
+            "certificate_hash": "8bc50cda0b762333c7c197feccf3431626a9a78c"
+          }
+        },
+        {
+          "client_id": "30170613785-tget5is0cteckkacqmf7ofm0nbvj32b6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyCZZz59m3T5-lYVa_EpLTa_21_3Mm6bf8w"
+          "current_key": "AIzaSyBZLq2aUrj4pYqHSr3cMXNtx4lYJDLQHAw"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "30170613785-tget5is0cteckkacqmf7ofm0nbvj32b6.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "30170613785-276oruaak9j0v27rhfmlo1jhauab3ncq.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.homecraft.service"
+              }
+            }
+          ]
         }
       }
     }
